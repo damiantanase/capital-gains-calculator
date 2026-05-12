@@ -1,0 +1,75 @@
+{
+  "name": "capital-gains-calculator",
+  "version": "1.0.0",
+  "description": "UK Capital Gains Tax calculator implementing HMRC share matching rules (Section 104 pool, same-day rule, bed & breakfast rule)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "Damian Tanase",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/damiantanase/capital-gains-calculator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/damiantanase/capital-gains-calculator/issues"
+  },
+  "homepage": "https://github.com/damiantanase/capital-gains-calculator#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "capital-gains",
+    "cgt",
+    "hmrc",
+    "uk-tax",
+    "section-104",
+    "share-matching",
+    "bed-and-breakfast"
+  ],
+  "scripts": {
+    "build": "npm run validate && tsup",
+    "validate": "npm run typecheck && npm run lint && npm run test:coverage",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "lint:fix": "eslint src tests --fix",
+    "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'",
+    "generate-fixtures": "npx tsx scripts/generate-fixtures.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.1.6",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.3",
+    "vitest": "^4.1.6"
+  }
+}

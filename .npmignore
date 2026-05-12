@@ -1,0 +1,37 @@
+# Source
+src/
+
+# Tests
+tests/
+**/__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+vitest.config.ts
+coverage/
+
+# CI/CD
+.github/
+
+# Development config
+.gitignore
+.eslintrc*
+.prettierrc*
+tsconfig.json
+CONTRIBUTING.md
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Generated / scripts
+generated/
+scripts/
+CLAUDE.md
+
+# Misc
+*.tgz
+.env*
+.turbo/
