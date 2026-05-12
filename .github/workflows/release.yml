@@ -22,11 +22,10 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
-          cache: npm
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
-        run: npm ci || (rm -rf node_modules && npm install)
+        run: npm install
 
       - name: Build (runs typecheck + lint + tests with 100% coverage enforcement)
         run: npm run build
