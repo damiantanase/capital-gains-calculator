@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Build (runs typecheck + lint + tests with 100% coverage enforcement)
+        run: npm run build
+
+      - name: Verify ESM exports
+        run: node --input-type=module -e "import { calculateCgt, normaliseTrades, calculateOptimalSell } from './dist/index.js'; if (typeof calculateCgt !== 'function') process.exit(1)"
+
+      - name: Verify CJS exports
+        run: node -e "const { calculateCgt, normaliseTrades, calculateOptimalSell } = require('./dist/index.cjs'); if (typeof calculateCgt !== 'function') process.exit(1)"
