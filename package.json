@@ -1,6 +1,6 @@
 {
   "name": "capital-gains-calculator",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "UK Capital Gains Tax calculator implementing HMRC share matching rules (Section 104 pool, same-day rule, bed & breakfast rule)",
   "type": "module",
   "exports": {

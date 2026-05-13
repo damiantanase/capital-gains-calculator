@@ -2160,26 +2160,93 @@ describe("CGT Calculator - Tax rate computation", () => {
 
     expect(year.periods).toHaveLength(2);
 
-    // Period 1: gain 5000, AEA absorbs 3000, taxable 2000 at 10%/20%
+    // AEA (3000) deducted from total net gain (10000), taxable = 7000
+    // Distributed proportionally: each period has 50% of gains → 3500 each
     const p1 = year.periods[0];
     expect(p1.rates).toEqual({ basic: 10, higher: 20 });
     expect(p1.totalGains).toBe(5000);
-    expect(p1.taxableGain).toBe(2000);
-    expect(p1.taxBasicRate).toBeCloseTo(200);
-    expect(p1.taxHigherRate).toBeCloseTo(400);
+    expect(p1.taxableGain).toBe(3500);
+    expect(p1.taxBasicRate).toBeCloseTo(350);
+    expect(p1.taxHigherRate).toBeCloseTo(700);
 
-    // Period 2: gain 5000, no AEA remaining, taxable 5000 at 18%/24%
     const p2 = year.periods[1];
     expect(p2.rates).toEqual({ basic: 18, higher: 24 });
     expect(p2.totalGains).toBe(5000);
-    expect(p2.taxableGain).toBe(5000);
-    expect(p2.taxBasicRate).toBeCloseTo(900);
-    expect(p2.taxHigherRate).toBeCloseTo(1200);
+    expect(p2.taxableGain).toBe(3500);
+    expect(p2.taxBasicRate).toBeCloseTo(630);
+    expect(p2.taxHigherRate).toBeCloseTo(840);
 
     // Year totals
     expect(year.taxableGain).toBe(7000);
-    expect(year.taxBasicRate).toBeCloseTo(1100);
-    expect(year.taxHigherRate).toBeCloseTo(1600);
+    expect(year.taxBasicRate).toBeCloseTo(980);
+    expect(year.taxHigherRate).toBeCloseTo(1540);
+  });
+
+  it("loss in period 1 offsets gain in period 2 — net below AEA means no tax", () => {
+    const customAllowances = { "2024/25": 3000 };
+    const trades: CgtTradeInput[] = [
+      makeTrade({ date: "2024-05-01", symbol: "AAA", type: "buy", quantity: 100, unitPrice: 100 }),
+      makeTrade({ date: "2024-05-01", symbol: "BBB", type: "buy", quantity: 100, unitPrice: 100 }),
+      // Period 1: sell at loss (gain = -1000)
+      makeTrade({ date: "2024-09-01", symbol: "AAA", type: "sell", quantity: 100, unitPrice: 90 }),
+      // Period 2: sell at profit (gain = 2000)
+      makeTrade({ date: "2024-11-15", symbol: "BBB", type: "sell", quantity: 100, unitPrice: 120 }),
+    ];
+    const result = runCgt(trades, { allowances: customAllowances });
+    const year = result.taxYears[0];
+
+    // Total net: -1000 + 2000 = 1000, below AEA of 3000 → no tax
+    expect(year.netGainLoss).toBe(1000);
+    expect(year.taxableGain).toBe(0);
+    expect(year.taxBasicRate).toBe(0);
+    expect(year.taxHigherRate).toBe(0);
+  });
+
+  it("loss in period 1 offsets gain in period 2 — net above AEA, tax only on excess", () => {
+    const customAllowances = { "2024/25": 3000 };
+    const trades: CgtTradeInput[] = [
+      makeTrade({ date: "2024-05-01", symbol: "AAA", type: "buy", quantity: 100, unitPrice: 100 }),
+      makeTrade({ date: "2024-05-01", symbol: "BBB", type: "buy", quantity: 100, unitPrice: 100 }),
+      // Period 1: loss of 1000
+      makeTrade({ date: "2024-09-01", symbol: "AAA", type: "sell", quantity: 100, unitPrice: 90 }),
+      // Period 2: gain of 4100
+      makeTrade({ date: "2024-11-15", symbol: "BBB", type: "sell", quantity: 100, unitPrice: 141 }),
+    ];
+    const result = runCgt(trades, { allowances: customAllowances });
+    const year = result.taxYears[0];
+
+    // Net: -1000 + 4100 = 3100, minus AEA 3000 → taxable = 100
+    expect(year.netGainLoss).toBe(3100);
+    expect(year.taxableGain).toBeCloseTo(100);
+    // Only period 2 has positive gains so all taxable goes there (at 18%/24%)
+    expect(year.periods[1].taxableGain).toBeCloseTo(100);
+    expect(year.periods[1].taxBasicRate).toBeCloseTo(18);
+    expect(year.periods[1].taxHigherRate).toBeCloseTo(24);
+  });
+
+  it("gains in both periods — AEA deducted proportionally", () => {
+    const customAllowances = { "2024/25": 3000 };
+    const trades: CgtTradeInput[] = [
+      makeTrade({ date: "2024-05-01", symbol: "AAA", type: "buy", quantity: 100, unitPrice: 100 }),
+      makeTrade({ date: "2024-05-01", symbol: "BBB", type: "buy", quantity: 100, unitPrice: 100 }),
+      // Period 1: gain of 3000
+      makeTrade({ date: "2024-09-01", symbol: "AAA", type: "sell", quantity: 100, unitPrice: 130 }),
+      // Period 2: gain of 3000
+      makeTrade({ date: "2024-11-15", symbol: "BBB", type: "sell", quantity: 100, unitPrice: 130 }),
+    ];
+    const result = runCgt(trades, { allowances: customAllowances });
+    const year = result.taxYears[0];
+
+    // Net: 6000, minus AEA 3000 → taxable = 3000
+    // Proportional: each period has 50% of gains → 1500 each
+    expect(year.taxableGain).toBe(3000);
+    expect(year.periods[0].taxableGain).toBe(1500);
+    expect(year.periods[1].taxableGain).toBe(1500);
+    // Period 1 at 10%/20%, Period 2 at 18%/24%
+    expect(year.periods[0].taxBasicRate).toBeCloseTo(150);
+    expect(year.periods[0].taxHigherRate).toBeCloseTo(300);
+    expect(year.periods[1].taxBasicRate).toBeCloseTo(270);
+    expect(year.periods[1].taxHigherRate).toBeCloseTo(360);
   });
 
   it("AEA fully absorbs gains — zero tax", () => {

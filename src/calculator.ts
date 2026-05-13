@@ -708,15 +708,21 @@ function buildTaxYearSummaries(
         };
       });
 
-      // Distribute AEA across periods in chronological order, then compute tax
-      let remainingAEA = aea;
-      for (const period of periods) {
-        const periodGain = Math.max(0, period.netGainLoss);
-        const aeaForPeriod = Math.min(remainingAEA, periodGain);
-        remainingAEA -= aeaForPeriod;
-        period.taxableGain = periodGain - aeaForPeriod;
-        period.taxBasicRate = period.taxableGain * (period.rates.basic / 100);
-        period.taxHigherRate = period.taxableGain * (period.rates.higher / 100);
+      // AEA applies to the year's total net gain, then taxable amount is distributed
+      // proportionally across periods based on each period's contribution to total gains.
+      // Losses offset gains at the year level (not per-period).
+      const yearNetGain = periods.reduce((sum, p) => sum + p.netGainLoss, 0);
+      const yearTaxableGain = Math.max(0, yearNetGain - aea);
+
+      // Each period's share of the taxable gain is proportional to its positive net gain
+      const periodPositiveGains = periods.map((p) => Math.max(0, p.netGainLoss));
+      const totalPositiveGains = periodPositiveGains.reduce((sum, g) => sum + g, 0);
+
+      for (let i = 0; i < periods.length; i++) {
+        const proportion = totalPositiveGains > 0 ? periodPositiveGains[i] / totalPositiveGains : 0;
+        periods[i].taxableGain = yearTaxableGain * proportion;
+        periods[i].taxBasicRate = periods[i].taxableGain * (periods[i].rates.basic / 100);
+        periods[i].taxHigherRate = periods[i].taxableGain * (periods[i].rates.higher / 100);
       }
 
       const totalProceeds = actualDisposals.reduce((sum, d) => sum + d.proceedsGBP, 0);
