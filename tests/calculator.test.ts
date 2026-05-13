@@ -755,6 +755,228 @@ describe("CGT Calculator - Transfers", () => {
   });
 });
 
+describe("CGT Calculator - Transfer matching (same-day & B&B)", () => {
+  it("transfer matches same-day buy (not pool), affecting cost basis for recipient", () => {
+    const trades: CgtTradeInput[] = [
+      makeTrade({
+        id: 1,
+        date: "2022-05-01",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 100,
+        unitPrice: 50,
+      }),
+      makeTrade({
+        id: 2,
+        date: "2023-01-15",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 50,
+        unitPrice: 200,
+      }),
+      makeTrade({
+        id: 3,
+        date: "2023-01-15",
+        symbol: "AAPL",
+        type: "transfer",
+        quantity: 50,
+        unitPrice: 0,
+      }),
+    ];
+    const result = runCgt(trades, { allowances });
+    const transfer = result.taxYears[0].disposals.find((d) => d.type === "transfer")!;
+
+    expect(transfer.gainGBP).toBe(0);
+    expect(transfer.matches).toHaveLength(1);
+    expect(transfer.matches[0].rule).toBe("same-day");
+    expect(transfer.matches[0].costPerShareGBP).toBeCloseTo(200, 0);
+    expect(transfer.totalCostGBP).toBeCloseTo(50 * 200, 0);
+
+    // Pool should retain original 100 shares at £50 (the same-day buy was consumed by transfer)
+    const pool = result.pools.find((p) => p.symbol === "AAPL")!;
+    expect(pool.shares).toBe(100);
+    expect(pool.costGBP).toBeCloseTo(100 * 50, 0);
+  });
+
+  it("transfer matches B&B buy within 30 days", () => {
+    const trades: CgtTradeInput[] = [
+      makeTrade({
+        id: 1,
+        date: "2022-05-01",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 100,
+        unitPrice: 50,
+      }),
+      makeTrade({
+        id: 2,
+        date: "2023-01-10",
+        symbol: "AAPL",
+        type: "transfer",
+        quantity: 30,
+        unitPrice: 0,
+      }),
+      makeTrade({
+        id: 3,
+        date: "2023-01-20",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 30,
+        unitPrice: 180,
+      }),
+    ];
+    const result = runCgt(trades, { allowances });
+    const transfer = result.taxYears[0].disposals.find((d) => d.type === "transfer")!;
+
+    expect(transfer.gainGBP).toBe(0);
+    expect(transfer.matches).toHaveLength(1);
+    expect(transfer.matches[0].rule).toBe("bed-and-breakfast");
+    expect(transfer.matches[0].costPerShareGBP).toBeCloseTo(180, 0);
+    expect(transfer.totalCostGBP).toBeCloseTo(30 * 180, 0);
+
+    // Pool should retain original 100 shares at £50 (the B&B buy was consumed by transfer)
+    const pool = result.pools.find((p) => p.symbol === "AAPL")!;
+    expect(pool.shares).toBe(100);
+    expect(pool.costGBP).toBeCloseTo(100 * 50, 0);
+  });
+
+  it("transfer with partial same-day match and remainder from pool", () => {
+    const trades: CgtTradeInput[] = [
+      makeTrade({
+        id: 1,
+        date: "2022-05-01",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 100,
+        unitPrice: 50,
+      }),
+      makeTrade({
+        id: 2,
+        date: "2023-01-15",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 20,
+        unitPrice: 200,
+      }),
+      makeTrade({
+        id: 3,
+        date: "2023-01-15",
+        symbol: "AAPL",
+        type: "transfer",
+        quantity: 50,
+        unitPrice: 0,
+      }),
+    ];
+    const result = runCgt(trades, { allowances });
+    const transfer = result.taxYears[0].disposals.find((d) => d.type === "transfer")!;
+
+    expect(transfer.gainGBP).toBe(0);
+    expect(transfer.matches).toHaveLength(2);
+
+    const sameDayMatch = transfer.matches.find((m) => m.rule === "same-day")!;
+    expect(sameDayMatch.quantity).toBe(20);
+    expect(sameDayMatch.costPerShareGBP).toBeCloseTo(200, 0);
+
+    const poolMatch = transfer.matches.find((m) => m.rule === "section-104")!;
+    expect(poolMatch.quantity).toBe(30);
+    expect(poolMatch.costPerShareGBP).toBeCloseTo(50, 0);
+
+    // Cost basis for recipient: 20 shares at £200 + 30 shares at £50
+    expect(transfer.totalCostGBP).toBeCloseTo(20 * 200 + 30 * 50, 0);
+
+    // Pool: started with 100 @ £50, 30 removed from pool
+    const pool = result.pools.find((p) => p.symbol === "AAPL")!;
+    expect(pool.shares).toBe(70);
+    expect(pool.costGBP).toBeCloseTo(70 * 50, 0);
+  });
+
+  it("transfer B&B does not consume buy needed for a sell on same day", () => {
+    const trades: CgtTradeInput[] = [
+      makeTrade({
+        id: 1,
+        date: "2022-05-01",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 100,
+        unitPrice: 50,
+      }),
+      makeTrade({
+        id: 2,
+        date: "2023-01-10",
+        symbol: "AAPL",
+        type: "sell",
+        quantity: 30,
+        unitPrice: 180,
+      }),
+      makeTrade({
+        id: 3,
+        date: "2023-01-10",
+        symbol: "AAPL",
+        type: "transfer",
+        quantity: 30,
+        unitPrice: 0,
+      }),
+      makeTrade({
+        id: 4,
+        date: "2023-01-20",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 40,
+        unitPrice: 160,
+      }),
+    ];
+    const result = runCgt(trades, { allowances });
+
+    const sell = result.taxYears[0].disposals.find((d) => d.type === "disposal")!;
+    const transfer = result.taxYears[0].disposals.find((d) => d.type === "transfer")!;
+
+    // Both sell and transfer should try to match the B&B buy (40 shares available)
+    // Sells and transfers are processed in order — the sell matches first (30), transfer gets remaining (10) + pool (20)
+    const sellBnB = sell.matches.find((m) => m.rule === "bed-and-breakfast");
+    const transferBnB = transfer.matches.find((m) => m.rule === "bed-and-breakfast");
+
+    // The 40 available B&B shares should be distributed across both disposals
+    const totalBnBMatched = (sellBnB?.quantity ?? 0) + (transferBnB?.quantity ?? 0);
+    expect(totalBnBMatched).toBe(40);
+
+    expect(sell.gainGBP).not.toBe(0);
+    expect(transfer.gainGBP).toBe(0);
+  });
+
+  it("transfer still falls through to pool when no same-day or B&B available", () => {
+    const trades: CgtTradeInput[] = [
+      makeTrade({
+        id: 1,
+        date: "2022-05-01",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 100,
+        unitPrice: 50,
+      }),
+      makeTrade({
+        id: 2,
+        date: "2023-06-01",
+        symbol: "AAPL",
+        type: "transfer",
+        quantity: 40,
+        unitPrice: 0,
+      }),
+    ];
+    const result = runCgt(trades, { allowances });
+    const transfer = result.taxYears[0].disposals.find((d) => d.type === "transfer")!;
+
+    expect(transfer.gainGBP).toBe(0);
+    expect(transfer.matches).toHaveLength(1);
+    expect(transfer.matches[0].rule).toBe("section-104");
+    expect(transfer.matches[0].costPerShareGBP).toBeCloseTo(50, 0);
+    expect(transfer.totalCostGBP).toBeCloseTo(40 * 50, 0);
+
+    const pool = result.pools.find((p) => p.symbol === "AAPL")!;
+    expect(pool.shares).toBe(60);
+    expect(pool.costGBP).toBeCloseTo(60 * 50, 0);
+  });
+});
+
 describe("CGT Calculator - Losses", () => {
   it("loss when selling below cost", () => {
     const trades: CgtTradeInput[] = [
@@ -1903,7 +2125,13 @@ describe("CGT Calculator - Tax rate computation", () => {
   it("computes tax at basic and higher rates for a single period year", () => {
     const trades: CgtTradeInput[] = [
       makeTrade({ date: "2023-05-01", symbol: "AAPL", type: "buy", quantity: 100, unitPrice: 100 }),
-      makeTrade({ date: "2023-09-01", symbol: "AAPL", type: "sell", quantity: 100, unitPrice: 200 }),
+      makeTrade({
+        date: "2023-09-01",
+        symbol: "AAPL",
+        type: "sell",
+        quantity: 100,
+        unitPrice: 200,
+      }),
     ];
     const result = runCgt(trades, { allowances });
     const year = result.taxYears[0];
@@ -1990,7 +2218,13 @@ describe("CGT Calculator - Tax rate computation", () => {
 describe("CGT Calculator - Sell with no buys for symbol", () => {
   it("sell skips same-day/B&B matching when no buys exist for the symbol", () => {
     const trades: CgtTradeInput[] = [
-      makeTrade({ date: "2023-01-01", symbol: "ORPHAN", type: "sell", quantity: 10, unitPrice: 60 }),
+      makeTrade({
+        date: "2023-01-01",
+        symbol: "ORPHAN",
+        type: "sell",
+        quantity: 10,
+        unitPrice: 60,
+      }),
     ];
     const result = runCgt(trades, { allowances, skipValidation: true });
     const disposal = findDisposal(result, "2023-01-01", "ORPHAN")!;
@@ -2115,8 +2349,20 @@ describe("CGT Calculator - SHARE_TOLERANCE boundary", () => {
     // Buy 10.0001 shares, sell 10 — remainder is 0.0001 which equals SHARE_TOLERANCE
     // The remainder should NOT go to pool (treated as zero)
     const trades: CgtTradeInput[] = [
-      makeTrade({ date: "2023-01-01", symbol: "AAPL", type: "buy", quantity: 10.0001, unitPrice: 100 }),
-      makeTrade({ date: "2023-06-01", symbol: "AAPL", type: "sell", quantity: 10.0001, unitPrice: 150 }),
+      makeTrade({
+        date: "2023-01-01",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 10.0001,
+        unitPrice: 100,
+      }),
+      makeTrade({
+        date: "2023-06-01",
+        symbol: "AAPL",
+        type: "sell",
+        quantity: 10.0001,
+        unitPrice: 150,
+      }),
     ];
     const result = runCgt(trades, { allowances });
     // Should match successfully without residual pool
@@ -2127,7 +2373,13 @@ describe("CGT Calculator - SHARE_TOLERANCE boundary", () => {
     // Buy 10.001 shares, sell 10 — remainder is 0.001 > SHARE_TOLERANCE
     // This remainder SHOULD go to pool
     const trades: CgtTradeInput[] = [
-      makeTrade({ date: "2023-01-01", symbol: "AAPL", type: "buy", quantity: 10.001, unitPrice: 100 }),
+      makeTrade({
+        date: "2023-01-01",
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 10.001,
+        unitPrice: 100,
+      }),
       makeTrade({ date: "2023-06-01", symbol: "AAPL", type: "sell", quantity: 10, unitPrice: 150 }),
     ];
     const result = runCgt(trades, { allowances });
@@ -2160,7 +2412,7 @@ describe("CGT Calculator - Integration: FX + fees + fractional + multi-match", (
         quantity: 10,
         unitPrice: 160,
         allowableExpenditure: 5,
-        exchangeRate: 1.30,
+        exchangeRate: 1.3,
       }),
       // B&B buy: 5 AAPL @ $155 with $3 fees, rate 1.28 (within 30 days of sell)
       // Cost: (155*5 + 3) / 1.28 = 778/1.28 = 607.8125 GBP

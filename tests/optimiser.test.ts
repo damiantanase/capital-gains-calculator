@@ -145,10 +145,12 @@ describe("calculateOptimalSell", () => {
 
   describe("loss — stock at a loss", () => {
     it("returns loss status with lossPerShare", () => {
-      const r = unwrap(calculateOptimalSell({
-        ...baseParams,
-        currentPrice: 100, // 100/1.25 = 80 GBP, cost = 120 → loss of 40
-      }));
+      const r = unwrap(
+        calculateOptimalSell({
+          ...baseParams,
+          currentPrice: 100, // 100/1.25 = 80 GBP, cost = 120 → loss of 40
+        })
+      );
 
       expect(r.status).toBe("loss");
       expect(r.quantity).toBe(0);
@@ -158,10 +160,12 @@ describe("calculateOptimalSell", () => {
     });
 
     it("returns loss when price equals cost (zero gain)", () => {
-      const r = unwrap(calculateOptimalSell({
-        ...baseParams,
-        currentPrice: 150, // 150/1.25 = 120 = poolCostPerShare → zero gain
-      }));
+      const r = unwrap(
+        calculateOptimalSell({
+          ...baseParams,
+          currentPrice: 150, // 150/1.25 = 120 = poolCostPerShare → zero gain
+        })
+      );
 
       expect(r.status).toBe("loss");
       expect(r.lossPerShare).toBe(0);
@@ -170,13 +174,15 @@ describe("calculateOptimalSell", () => {
 
   describe("impossible — cannot achieve any AEA usage", () => {
     it("returns impossible when gain per share too small for whole shares", () => {
-      const r = unwrap(calculateOptimalSell({
-        ...baseParams,
-        currentPrice: 150.5, // 150.5/1.25 = 120.4, gain = 0.4
-        poolCostPerShare: 120,
-        poolShares: 1,
-        remainingAEA: 3000,
-      }));
+      const r = unwrap(
+        calculateOptimalSell({
+          ...baseParams,
+          currentPrice: 150.5, // 150.5/1.25 = 120.4, gain = 0.4
+          poolCostPerShare: 120,
+          poolShares: 1,
+          remainingAEA: 3000,
+        })
+      );
 
       // floor(3000/0.4) = 7500, capped at 1 share, gain = 0.4
       // 0.4/3000 = 0.013% — well below tolerance but quantity is valid (1)
@@ -186,14 +192,16 @@ describe("calculateOptimalSell", () => {
     });
 
     it("returns impossible when no whole shares can produce any gain", () => {
-      const r = unwrap(calculateOptimalSell({
-        ...baseParams,
-        currentPrice: 150.01, // 150.01/1.25 = 120.008, gain = 0.008
-        poolCostPerShare: 120,
-        poolShares: 0.5, // less than 1 whole share
-        remainingAEA: 3000,
-        allowFractional: false,
-      }));
+      const r = unwrap(
+        calculateOptimalSell({
+          ...baseParams,
+          currentPrice: 150.01, // 150.01/1.25 = 120.008, gain = 0.008
+          poolCostPerShare: 120,
+          poolShares: 0.5, // less than 1 whole share
+          remainingAEA: 3000,
+          allowFractional: false,
+        })
+      );
       // poolShares = 0.5 is valid (positive), floor(0.5) = 0
       expect(r.status).toBe("impossible");
       expect(r.quantity).toBe(0);
@@ -203,11 +211,13 @@ describe("calculateOptimalSell", () => {
 
   describe("fractional shares", () => {
     it("allows fractional quantities when allowFractional is true", () => {
-      const r = unwrap(calculateOptimalSell({
-        ...baseParams,
-        remainingAEA: 100,
-        allowFractional: true,
-      }));
+      const r = unwrap(
+        calculateOptimalSell({
+          ...baseParams,
+          remainingAEA: 100,
+          allowFractional: true,
+        })
+      );
 
       // gainPerShare = 40, ideal = 100/40 = 2.5 shares exactly
       expect(r.status).toBe("success");
@@ -217,12 +227,14 @@ describe("calculateOptimalSell", () => {
     });
 
     it("caps fractional at pool shares", () => {
-      const r = unwrap(calculateOptimalSell({
-        ...baseParams,
-        poolShares: 2.3,
-        remainingAEA: 100,
-        allowFractional: true,
-      }));
+      const r = unwrap(
+        calculateOptimalSell({
+          ...baseParams,
+          poolShares: 2.3,
+          remainingAEA: 100,
+          allowFractional: true,
+        })
+      );
 
       // ideal = 2.5, capped at 2.3
       expect(r.quantity).toBe(2.3);
@@ -234,11 +246,13 @@ describe("calculateOptimalSell", () => {
       // Whole shares: floor(2.5) = 2, gain = 80 (80% — partial)
       // Fractional: 2.5, gain = 100 (100% — success)
       const wholeR = unwrap(calculateOptimalSell({ ...baseParams, remainingAEA: 100 }));
-      const fracR = unwrap(calculateOptimalSell({
-        ...baseParams,
-        remainingAEA: 100,
-        allowFractional: true,
-      }));
+      const fracR = unwrap(
+        calculateOptimalSell({
+          ...baseParams,
+          remainingAEA: 100,
+          allowFractional: true,
+        })
+      );
 
       expect(wholeR.status).toBe("partial");
       expect(fracR.status).toBe("success");
@@ -247,14 +261,16 @@ describe("calculateOptimalSell", () => {
 
   describe("GBP stocks", () => {
     it("handles exchange rate of 1", () => {
-      const r = unwrap(calculateOptimalSell({
-        symbol: "SHEL",
-        currentPrice: 28,
-        exchangeRate: 1.0,
-        poolCostPerShare: 26,
-        poolShares: 200,
-        remainingAEA: 3000,
-      }));
+      const r = unwrap(
+        calculateOptimalSell({
+          symbol: "SHEL",
+          currentPrice: 28,
+          exchangeRate: 1.0,
+          poolCostPerShare: 26,
+          poolShares: 200,
+          remainingAEA: 3000,
+        })
+      );
 
       // gainPerShare = 2, ideal = 3000/2 = 1500, capped at 200
       // 200 * 2 = 400, 400/3000 = 13.3% — partial

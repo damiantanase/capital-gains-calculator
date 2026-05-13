@@ -20,7 +20,12 @@ export type { CgtTradeInput } from "./trade";
 
 // Optimiser
 export { calculateOptimalSell, validateOptimiseParams } from "./optimiser";
-export type { OptimiseParams, OptimiseResult, OptimalSellResult, OptimiseValidationError } from "./optimiser";
+export type {
+  OptimiseParams,
+  OptimiseResult,
+  OptimalSellResult,
+  OptimiseValidationError,
+} from "./optimiser";
 
 // Normalisation & validation
 export { normaliseTrades } from "./normalise";

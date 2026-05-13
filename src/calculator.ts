@@ -148,9 +148,10 @@ export function calculateCgt(
 
   const rawBuys = sorted.filter((t) => t.type === "buy");
   const rawSells = sorted.filter((t) => t.type === "sell");
-  const transfers = sorted.filter((t) => t.type === "transfer");
+  const rawTransfers = sorted.filter((t) => t.type === "transfer");
 
   const mergedSells = mergeSells(rawSells);
+  const mergedTransfers = mergeSells(rawTransfers);
   const mergedBuys = mergeBuys(rawBuys);
 
   const availableBuys = new Map<number, number>();
@@ -169,14 +170,70 @@ export function calculateCgt(
     sellMatches.set(ms.id, []);
   }
 
-  matchSameDay(mergedSells, buysBySymbol, availableBuys, sellRemainders, sellMatches);
-  matchBedAndBreakfast(mergedSells, buysBySymbol, availableBuys, sellRemainders, sellMatches);
+  const transferRemainders = new Map<number, number>();
+  const transferMatches = new Map<number, CgtMatch[]>();
+  for (const mt of mergedTransfers) {
+    transferRemainders.set(mt.id, mt.adjustedQuantity);
+    transferMatches.set(mt.id, []);
+  }
 
-  const { disposals, poolSnapshots, pools, buyPoolSnapshotsBefore, buyPoolSnapshotsAfter, buyPoolImpacts } =
-    processPoolEvents(mergedBuys, mergedSells, transfers, availableBuys, sellRemainders, sellMatches, splitEvents);
+  // Disposals (sells + transfers) participate in same-day and B&B matching
+  const allDisposals = [...mergedSells, ...mergedTransfers];
+  const allDisposalRemainders = new Map([...sellRemainders, ...transferRemainders]);
+  const allDisposalMatches = new Map([...sellMatches, ...transferMatches]);
+
+  matchSameDay(
+    allDisposals,
+    buysBySymbol,
+    availableBuys,
+    allDisposalRemainders,
+    allDisposalMatches
+  );
+  matchBedAndBreakfast(
+    allDisposals,
+    buysBySymbol,
+    availableBuys,
+    allDisposalRemainders,
+    allDisposalMatches
+  );
+
+  // Copy back updated remainders and matches
+  for (const ms of mergedSells) {
+    sellRemainders.set(ms.id, getOrThrow(allDisposalRemainders, ms.id));
+    sellMatches.set(ms.id, getOrThrow(allDisposalMatches, ms.id));
+  }
+  for (const mt of mergedTransfers) {
+    transferRemainders.set(mt.id, getOrThrow(allDisposalRemainders, mt.id));
+    transferMatches.set(mt.id, getOrThrow(allDisposalMatches, mt.id));
+  }
+
+  const {
+    disposals,
+    poolSnapshots,
+    pools,
+    buyPoolSnapshotsBefore,
+    buyPoolSnapshotsAfter,
+    buyPoolImpacts,
+  } = processPoolEvents(
+    mergedBuys,
+    mergedSells,
+    mergedTransfers,
+    availableBuys,
+    sellRemainders,
+    sellMatches,
+    transferRemainders,
+    transferMatches,
+    splitEvents
+  );
 
   const acquisitions = buildAcquisitions(
-    mergedBuys, mergedSells, availableBuys, sellMatches, buyPoolImpacts, buyPoolSnapshotsBefore, buyPoolSnapshotsAfter
+    mergedBuys,
+    [...mergedSells, ...mergedTransfers],
+    availableBuys,
+    allDisposalMatches,
+    buyPoolImpacts,
+    buyPoolSnapshotsBefore,
+    buyPoolSnapshotsAfter
   );
 
   const taxYears = buildTaxYearSummaries(disposals, acquisitions, allowances);
@@ -309,10 +366,12 @@ interface PoolEventResult {
 function processPoolEvents(
   mergedBuys: MergedBuy[],
   mergedSells: MergedSell[],
-  transfers: TradeModel[],
+  mergedTransfers: MergedSell[],
   availableBuys: Map<number, number>,
   sellRemainders: Map<number, number>,
   sellMatches: Map<number, CgtMatch[]>,
+  transferRemainders: Map<number, number>,
+  transferMatches: Map<number, CgtMatch[]>,
   splitEvents: SplitEvent[]
 ): PoolEventResult {
   const pools = new Map<string, { shares: number; costGBP: number }>();
@@ -344,12 +403,12 @@ function processPoolEvents(
   type PoolEvent =
     | { kind: "buy"; data: MergedBuy }
     | { kind: "sell"; data: MergedSell }
-    | { kind: "transfer"; data: TradeModel };
+    | { kind: "transfer"; data: MergedSell };
 
   const allEvents: PoolEvent[] = [];
   for (const mb of mergedBuys) allEvents.push({ kind: "buy", data: mb });
   for (const ms of mergedSells) allEvents.push({ kind: "sell", data: ms });
-  for (const t of transfers) allEvents.push({ kind: "transfer", data: t });
+  for (const mt of mergedTransfers) allEvents.push({ kind: "transfer", data: mt });
   allEvents.sort((a, b) => {
     if (a.data.date < b.data.date) return -1;
     if (a.data.date > b.data.date) return 1;
@@ -409,7 +468,11 @@ function processPoolEvents(
 
           pool.costGBP -= matchCost;
           pool.shares -= sharesToRemove;
-          sellPoolImpact = { symbol: ms.symbol, sharesRemoved: sharesToRemove, costRemoved: matchCost };
+          sellPoolImpact = {
+            symbol: ms.symbol,
+            sharesRemoved: sharesToRemove,
+            costRemoved: matchCost,
+          };
         }
       }
 
@@ -439,49 +502,68 @@ function processPoolEvents(
         poolStateBefore,
         poolStateAfter: capturePoolState(ms.date),
       });
-    } else { // transfer — removes shares from pool at average cost, zero gain
-      const trade = evt.data;
-      const adjQty = trade.adjustedQuantity();
-      const pool = pools.get(trade.symbol);
+    } else {
+      // transfer — participates in matching like a sell, but gain is always zero
+      const mt = evt.data;
+      const transferPoolStateBefore = capturePoolState(mt.date);
+      const remaining = getOrThrow(transferRemainders, mt.id);
+      const matches = getOrThrow(transferMatches, mt.id);
 
-      if (pool && pool.shares > SHARE_TOLERANCE) {
-        const transferPoolStateBefore = capturePoolState(trade.date);
-        const sharesToRemove = Math.min(adjQty, pool.shares);
-        const costPerShare = pool.costGBP / pool.shares;
-        const matchCost = sharesToRemove * costPerShare;
+      let transferPoolImpact: PoolImpact | null = null;
+      if (remaining > SHARE_TOLERANCE) {
+        const pool = pools.get(mt.symbol);
+        if (pool && pool.shares > SHARE_TOLERANCE) {
+          const sharesToRemove = Math.min(remaining, pool.shares);
+          const costPerShare = pool.costGBP / pool.shares;
+          const matchCost = sharesToRemove * costPerShare;
 
-        pool.costGBP -= matchCost;
-        pool.shares -= sharesToRemove;
+          matches.push({
+            rule: "section-104",
+            quantity: sharesToRemove,
+            originalQuantity: sharesToRemove / mt.adjustmentFactor,
+            costPerShareGBP: costPerShare,
+            costGBP: matchCost,
+            gainGBP: 0,
+            poolSharesAtMatch: pool.shares,
+            originalPoolSharesAtMatch: pool.shares / mt.adjustmentFactor,
+          });
 
+          pool.costGBP -= matchCost;
+          pool.shares -= sharesToRemove;
+          transferPoolImpact = {
+            symbol: mt.symbol,
+            sharesRemoved: sharesToRemove,
+            costRemoved: matchCost,
+          };
+        }
+      }
+
+      // Force zero gain on all matches (no-gain/no-loss disposal)
+      for (const m of matches) {
+        m.gainGBP = 0;
+      }
+
+      const totalCost = matches.reduce((sum, m) => sum + m.costGBP, 0);
+
+      if (matches.length > 0) {
         disposals.push({
           type: "transfer",
-          tradeId: trade.id,
-          date: trade.date,
-          symbol: trade.symbol,
-          quantity: adjQty,
-          originalQuantity: trade.quantity,
-          pricePerShareGBP: costPerShare,
-          originalPricePerShareGBP: trade.unitPrice / trade.exchangeRate,
-          adjustmentFactor: trade.adjustmentFactor,
+          tradeId: mt.id,
+          date: mt.date,
+          symbol: mt.symbol,
+          quantity: mt.adjustedQuantity,
+          originalQuantity: mt.originalQuantity,
+          pricePerShareGBP: totalCost / mt.adjustedQuantity,
+          originalPricePerShareGBP: totalCost / mt.originalQuantity,
+          adjustmentFactor: mt.adjustmentFactor,
           feesGBP: 0,
-          proceedsGBP: matchCost,
-          totalCostGBP: matchCost,
+          proceedsGBP: totalCost,
+          totalCostGBP: totalCost,
           gainGBP: 0,
-          matches: [
-            {
-              rule: "section-104",
-              quantity: sharesToRemove,
-              originalQuantity: sharesToRemove / trade.adjustmentFactor,
-              costPerShareGBP: costPerShare,
-              costGBP: matchCost,
-              gainGBP: 0,
-              poolSharesAtMatch: pool.shares + sharesToRemove,
-              originalPoolSharesAtMatch: (pool.shares + sharesToRemove) / trade.adjustmentFactor,
-            },
-          ],
-          poolImpact: { symbol: trade.symbol, sharesRemoved: sharesToRemove, costRemoved: matchCost },
+          matches,
+          poolImpact: transferPoolImpact,
           poolStateBefore: transferPoolStateBefore,
-          poolStateAfter: capturePoolState(trade.date),
+          poolStateAfter: capturePoolState(mt.date),
         });
       }
     }
@@ -491,7 +573,14 @@ function processPoolEvents(
     poolSnapshots[lastTaxYear] = capturePoolState();
   }
 
-  return { disposals, poolSnapshots, pools: capturePoolState(), buyPoolSnapshotsBefore, buyPoolSnapshotsAfter, buyPoolImpacts };
+  return {
+    disposals,
+    poolSnapshots,
+    pools: capturePoolState(),
+    buyPoolSnapshotsBefore,
+    buyPoolSnapshotsAfter,
+    buyPoolImpacts,
+  };
 }
 
 // --- Build acquisitions ---
@@ -632,8 +721,12 @@ function buildTaxYearSummaries(
 
       const totalProceeds = actualDisposals.reduce((sum, d) => sum + d.proceedsGBP, 0);
       const totalCosts = actualDisposals.reduce((sum, d) => sum + d.totalCostGBP, 0);
-      const totalGains = actualDisposals.filter((d) => d.gainGBP > 0).reduce((sum, d) => sum + d.gainGBP, 0);
-      const totalLosses = actualDisposals.filter((d) => d.gainGBP < 0).reduce((sum, d) => sum + d.gainGBP, 0);
+      const totalGains = actualDisposals
+        .filter((d) => d.gainGBP > 0)
+        .reduce((sum, d) => sum + d.gainGBP, 0);
+      const totalLosses = actualDisposals
+        .filter((d) => d.gainGBP < 0)
+        .reduce((sum, d) => sum + d.gainGBP, 0);
 
       const yearAcquisitions = acquisitions.filter((a) => getTaxYearForDate(a.date) === taxYear);
 
@@ -655,4 +748,3 @@ function buildTaxYearSummaries(
       };
     });
 }
-
