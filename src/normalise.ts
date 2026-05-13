@@ -3,7 +3,6 @@ import type { CgtTradeInput } from "./trade";
 import { prepareTrades, TradeModel } from "./trade";
 import { SHARE_TOLERANCE } from "./constants";
 
-
 export interface ValidationError {
   index: number;
   field: string;
@@ -220,7 +219,8 @@ function validatePositions(
     // subsequent position tracking becomes unreliable after a rejected transaction.
     if (t.type === "buy") {
       positions.set(symbol, current + adjustedQty);
-    } else { // sell or transfer — check if position has enough shares
+    } else {
+      // sell or transfer — check if position has enough shares
       if (adjustedQty > current + SHARE_TOLERANCE) {
         errors.push({
           index: t.localIndex,
