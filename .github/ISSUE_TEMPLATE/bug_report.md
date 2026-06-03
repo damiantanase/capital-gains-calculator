@@ -13,8 +13,11 @@ A clear description of the bug.
 ## Input Trades
 
 ```typescript
-const trades: CgtTradeInput[] = [
+import type { CgTradeInput } from "capital-gains-calculator";
+
+const trades: CgTradeInput[] = [
   // Paste your trades here (anonymise symbols/amounts if preferred)
+  // Dates are Date objects, e.g. date: new Date("2023-01-15")
 ];
 ```
 

@@ -1,17 +1,20 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "lib": ["ES2022"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
     "isolatedModules": true,
+    "verbatimModuleSyntax": true,
     "declaration": true,
     "sourceMap": true,
+    // src is not published (files: ["dist"]), so embed the original source
+    // text into the .js.map files — keeps debugging working from dist alone.
+    "inlineSources": true,
     "outDir": "./dist",
     "rootDir": "./src"
   },

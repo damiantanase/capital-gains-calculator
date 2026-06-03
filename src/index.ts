@@ -1,44 +1,34 @@
 // Core calculation
-export { calculateCgt } from "./calculator";
-export type { CalculateCgtOptions } from "./calculator";
+export { calculateCgt } from "./calculate.js";
+export type { CgCalculateOptions } from "./calculate.js";
+
+// Trade input type
+export type { CgTradeInput } from "./trade.js";
+
+// Errors
+export { CgValidationError } from "./errors.js";
+export type { CgValidationDetail } from "./errors.js";
+
+// Public date utilities (UK tax-year helpers)
+export { getTaxYearForDate, getCurrentTaxYear } from "./helpers.js";
+
+// HMRC support info (supported date range, rates, and allowances — without a calculation)
+export { getSupportInfo } from "./hmrc-config.js";
+
+// Output types
 export type {
-  Result,
-  CgtResult,
-  CgtDisposal,
-  CgtMatch,
-  CgtAcquisition,
-  CgtTaxYearSummary,
-  CgtRatePeriodSummary,
-  Section104Pool,
-  PoolImpact,
-  NormalisedTransaction,
-  SplitEvent,
-} from "./types";
-
-// Trade input
-export type { CgtTradeInput } from "./trade";
-
-// Optimiser
-export { calculateOptimalSell, validateOptimiseParams } from "./optimiser";
-export type {
-  OptimiseParams,
-  OptimiseResult,
-  OptimalSellResult,
-  OptimiseValidationError,
-} from "./optimiser";
-
-// Normalisation & validation
-export { normaliseTrades } from "./normalise";
-export type { ValidationError, NormaliseResult, NormaliseOptions } from "./normalise";
-
-// HMRC config / helpers
-export {
-  getDefaultAllowances,
-  getReportingThresholds,
-  getAllTaxYears,
-  getTaxYearConfig,
-  getAllTaxYearConfigs,
-  getRatesForDate,
-} from "./hmrc-config";
-export type { TaxYearConfig, CgtRateBand, CgtRatePeriod } from "./hmrc-config";
-export { getTaxYearForDate, getCurrentTaxYear } from "./constants";
+  CgCalculateResult,
+  CgEvent,
+  CgMatch,
+  CgTaxYearSummary,
+  CgRatePeriodSummary,
+  CgReportingReason,
+  CgSection104Pool,
+  CgPoolImpact,
+  CgNormalisedTransaction,
+  CgSplitEvent,
+  CgTaxLimits,
+  CgRatePeriod,
+  CgTaxYearConfig,
+  CgSupportInfo,
+} from "./types/index.js";

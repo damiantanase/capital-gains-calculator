@@ -1,3 +1,0 @@
-. "$HOME/.nvm/nvm.sh"
-nvm use >/dev/null
-npx lint-staged

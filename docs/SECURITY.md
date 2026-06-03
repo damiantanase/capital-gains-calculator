@@ -4,9 +4,10 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x   | Yes       |
+| 2.x     | Yes       |
+| < 2.0   | No        |
 
-Only the latest minor version receives security patches.
+Only the latest released version receives security patches.
 
 ## Reporting a Vulnerability
 

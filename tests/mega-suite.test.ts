@@ -1,7 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { calculateCgt } from "../src/calculator";
-import type { CgtTradeInput } from "../src/trade";
-import type { SplitEvent, CgtResult } from "../src/types";
+import { calculateCgt } from "../src/calculate";
+import type {
+  CgTradeInput,
+  CgSplitEvent,
+  CgCalculateResult,
+  CgNormalisedTransaction,
+  CgEvent,
+} from "../src/types";
+
+function d(s: string): Date {
+  return new Date(s);
+}
+
+function currentPools(result: CgCalculateResult) {
+  return result.taxYears.length > 0 ? result.taxYears[0].poolAtYearEnd : [];
+}
+
+function yearDisposals(ty: CgCalculateResult["taxYears"][number]): CgEvent[] {
+  return ty.periods.flatMap((p) =>
+    p.events.filter((e) => e.type === "sell" || e.type === "transfer")
+  );
+}
+
+function yearAcquisitions(ty: CgCalculateResult["taxYears"][number]): CgEvent[] {
+  return ty.periods.flatMap((p) => p.events.filter((e) => e.type === "buy"));
+}
 
 // ---------------------------------------------------------------------------
 // Mega-suite: ~500 trades covering all realistic UK CGT edge cases
@@ -38,18 +61,18 @@ import type { SplitEvent, CgtResult } from "../src/types";
 //   26. 2024/25 split rate period (pre/post 30 Oct 2024)
 //
 
-const splitEvents: SplitEvent[] = [
-  { date: "2020-08-31", symbol: "AAPL", ratioFrom: 1, ratioTo: 4 },
-  { date: "2022-06-06", symbol: "AMZN", ratioFrom: 1, ratioTo: 20 },
-  { date: "2022-07-18", symbol: "GOOGL", ratioFrom: 1, ratioTo: 20 },
-  { date: "2022-08-25", symbol: "TSLA", ratioFrom: 1, ratioTo: 3 },
-  { date: "2024-06-10", symbol: "NVDA", ratioFrom: 1, ratioTo: 10 },
+const splitEvents: CgSplitEvent[] = [
+  { date: d("2020-08-31"), symbol: "AAPL", ratioFrom: 1, ratioTo: 4 },
+  { date: d("2022-06-06"), symbol: "AMZN", ratioFrom: 1, ratioTo: 20 },
+  { date: d("2022-07-18"), symbol: "GOOGL", ratioFrom: 1, ratioTo: 20 },
+  { date: d("2022-08-25"), symbol: "TSLA", ratioFrom: 1, ratioTo: 3 },
+  { date: d("2024-06-10"), symbol: "NVDA", ratioFrom: 1, ratioTo: 10 },
 ];
 
-const trades: CgtTradeInput[] = [
+const trades: CgTradeInput[] = [
   // --- 2008/09 tax year ---
   {
-    date: "2008-04-10",
+    date: d("2008-04-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 3000,
@@ -57,7 +80,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2008-06-01",
+    date: d("2008-06-01"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -65,7 +88,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2008-09-15",
+    date: d("2008-09-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -73,7 +96,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2008-11-01",
+    date: d("2008-11-01"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -81,7 +104,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2009-01-10",
+    date: d("2009-01-10"),
     symbol: "LLOY",
     type: "buy",
     quantity: 10000,
@@ -89,7 +112,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2009-02-15",
+    date: d("2009-02-15"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -98,7 +121,7 @@ const trades: CgtTradeInput[] = [
   },
   // --- 2009/10 tax year ---
   {
-    date: "2009-05-01",
+    date: d("2009-05-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -106,7 +129,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2009-06-15",
+    date: d("2009-06-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -114,7 +137,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2009-08-01",
+    date: d("2009-08-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -122,7 +145,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2009-10-20",
+    date: d("2009-10-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 3000,
@@ -130,7 +153,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2009-12-01",
+    date: d("2009-12-01"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -138,7 +161,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2010-02-10",
+    date: d("2010-02-10"),
     symbol: "VOD",
     type: "sell",
     quantity: 1500,
@@ -147,7 +170,7 @@ const trades: CgtTradeInput[] = [
   },
   // --- 2010/11 tax year ---
   {
-    date: "2010-04-15",
+    date: d("2010-04-15"),
     symbol: "BP",
     type: "buy",
     quantity: 5000,
@@ -155,7 +178,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2010-06-01",
+    date: d("2010-06-01"),
     symbol: "BP",
     type: "sell",
     quantity: 2000,
@@ -163,7 +186,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2010-07-20",
+    date: d("2010-07-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 150,
@@ -171,7 +194,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2010-09-01",
+    date: d("2010-09-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 8000,
@@ -179,7 +202,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2010-11-15",
+    date: d("2010-11-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 1500,
@@ -187,7 +210,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2011-01-10",
+    date: d("2011-01-10"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -195,7 +218,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2011-03-01",
+    date: d("2011-03-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 200,
@@ -204,7 +227,7 @@ const trades: CgtTradeInput[] = [
   },
   // --- 2011/12 tax year ---
   {
-    date: "2011-05-01",
+    date: d("2011-05-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -212,7 +235,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2011-06-15",
+    date: d("2011-06-15"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -220,7 +243,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2011-08-01",
+    date: d("2011-08-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 10000,
@@ -228,7 +251,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2011-09-15",
+    date: d("2011-09-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 2000,
@@ -236,7 +259,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2011-11-01",
+    date: d("2011-11-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 100,
@@ -244,7 +267,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2012-01-20",
+    date: d("2012-01-20"),
     symbol: "BP",
     type: "sell",
     quantity: 3000,
@@ -253,7 +276,7 @@ const trades: CgtTradeInput[] = [
   },
   // --- 2012/13 tax year ---
   {
-    date: "2012-05-10",
+    date: d("2012-05-10"),
     symbol: "LLOY",
     type: "sell",
     quantity: 8000,
@@ -261,7 +284,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2012-06-01",
+    date: d("2012-06-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 2500,
@@ -269,7 +292,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2012-08-15",
+    date: d("2012-08-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -277,7 +300,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2012-10-01",
+    date: d("2012-10-01"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -285,7 +308,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2012-12-10",
+    date: d("2012-12-10"),
     symbol: "VOD",
     type: "sell",
     quantity: 1500,
@@ -293,7 +316,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2013-02-01",
+    date: d("2013-02-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 12000,
@@ -302,7 +325,7 @@ const trades: CgtTradeInput[] = [
   },
   // --- 2013/14 tax year ---
   {
-    date: "2013-05-01",
+    date: d("2013-05-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 150,
@@ -310,7 +333,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2013-06-15",
+    date: d("2013-06-15"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -318,7 +341,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2013-08-01",
+    date: d("2013-08-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 3000,
@@ -326,7 +349,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2013-09-15",
+    date: d("2013-09-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -334,7 +357,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2013-09-15",
+    date: d("2013-09-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -342,7 +365,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2013-11-01",
+    date: d("2013-11-01"),
     symbol: "BP",
     type: "sell",
     quantity: 2000,
@@ -350,7 +373,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2014-01-15",
+    date: d("2014-01-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 250,
@@ -359,7 +382,7 @@ const trades: CgtTradeInput[] = [
   },
   // --- 2014/15 tax year ---
   {
-    date: "2014-04-10",
+    date: d("2014-04-10"),
     symbol: "VOD",
     type: "sell",
     quantity: 2000,
@@ -367,7 +390,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2014-06-01",
+    date: d("2014-06-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 8000,
@@ -375,7 +398,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2014-08-15",
+    date: d("2014-08-15"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -383,7 +406,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2014-09-01",
+    date: d("2014-09-01"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -391,7 +414,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2014-09-20",
+    date: d("2014-09-20"),
     symbol: "BP",
     type: "buy",
     quantity: 500,
@@ -399,7 +422,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2014-11-01",
+    date: d("2014-11-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -407,7 +430,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-01-10",
+    date: d("2015-01-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 4000,
@@ -415,7 +438,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-03-15",
+    date: d("2015-03-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 10000,
@@ -424,7 +447,7 @@ const trades: CgtTradeInput[] = [
   },
   // --- 2015/16 tax year onwards (original data) ---
   {
-    date: "2015-04-10",
+    date: d("2015-04-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -432,7 +455,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-04-15",
+    date: d("2015-04-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 100,
@@ -440,7 +463,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2015-04-20",
+    date: d("2015-04-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 30,
@@ -449,7 +472,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2015-05-01",
+    date: d("2015-05-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 5,
@@ -458,7 +481,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2015-05-15",
+    date: d("2015-05-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 1500,
@@ -466,7 +489,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-05-20",
+    date: d("2015-05-20"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -474,7 +497,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-06-01",
+    date: d("2015-06-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 500,
@@ -482,7 +505,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-06-15",
+    date: d("2015-06-15"),
     symbol: "BP",
     type: "buy",
     quantity: 3000,
@@ -490,7 +513,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2015-07-01",
+    date: d("2015-07-01"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -499,7 +522,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2015-07-10",
+    date: d("2015-07-10"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -508,7 +531,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2015-07-20",
+    date: d("2015-07-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -516,7 +539,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2015-08-10",
+    date: d("2015-08-10"),
     symbol: "AAPL",
     type: "buy",
     quantity: 20,
@@ -525,7 +548,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2015-08-20",
+    date: d("2015-08-20"),
     symbol: "TSLA",
     type: "buy",
     quantity: 3,
@@ -534,7 +557,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2015-09-01",
+    date: d("2015-09-01"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 15,
@@ -543,7 +566,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2015-09-15",
+    date: d("2015-09-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -551,7 +574,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2015-09-20",
+    date: d("2015-09-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 3,
@@ -560,7 +583,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2015-10-01",
+    date: d("2015-10-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -569,7 +592,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2015-10-15",
+    date: d("2015-10-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -577,7 +600,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2015-10-20",
+    date: d("2015-10-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 1000,
@@ -585,7 +608,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2015-11-01",
+    date: d("2015-11-01"),
     symbol: "LLOY",
     type: "sell",
     quantity: 2000,
@@ -593,7 +616,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2015-11-01",
+    date: d("2015-11-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -601,7 +624,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2015-11-15",
+    date: d("2015-11-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -609,7 +632,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2015-11-20",
+    date: d("2015-11-20"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -617,7 +640,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-12-01",
+    date: d("2015-12-01"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -625,7 +648,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2015-12-15",
+    date: d("2015-12-15"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 5,
@@ -634,7 +657,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2015-12-20",
+    date: d("2015-12-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 25,
@@ -643,7 +666,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2016-01-05",
+    date: d("2016-01-05"),
     symbol: "MSFT",
     type: "buy",
     quantity: 3,
@@ -652,7 +675,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2016-01-10",
+    date: d("2016-01-10"),
     symbol: "AAPL",
     type: "buy",
     quantity: 10,
@@ -661,7 +684,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2016-01-20",
+    date: d("2016-01-20"),
     symbol: "TSLA",
     type: "buy",
     quantity: 2,
@@ -670,7 +693,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2016-01-25",
+    date: d("2016-01-25"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 3,
@@ -679,7 +702,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2016-02-01",
+    date: d("2016-02-01"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -687,7 +710,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-02-10",
+    date: d("2016-02-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 800,
@@ -695,7 +718,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-02-15",
+    date: d("2016-02-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 500,
@@ -703,7 +726,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-02-20",
+    date: d("2016-02-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 2000,
@@ -711,7 +734,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-03-01",
+    date: d("2016-03-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -719,7 +742,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-03-10",
+    date: d("2016-03-10"),
     symbol: "AAPL",
     type: "buy",
     quantity: 5,
@@ -728,7 +751,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2016-03-15",
+    date: d("2016-03-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 20,
@@ -737,7 +760,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2016-03-20",
+    date: d("2016-03-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -745,7 +768,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2016-04-05",
+    date: d("2016-04-05"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -753,7 +776,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-04-06",
+    date: d("2016-04-06"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -761,7 +784,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-04-20",
+    date: d("2016-04-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 2,
@@ -770,7 +793,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2016-05-10",
+    date: d("2016-05-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 800,
@@ -778,7 +801,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-05-10",
+    date: d("2016-05-10"),
     symbol: "VOD",
     type: "sell",
     quantity: 800,
@@ -786,7 +809,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-05-20",
+    date: d("2016-05-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 15,
@@ -795,7 +818,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2016-06-01",
+    date: d("2016-06-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -803,7 +826,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2016-06-01",
+    date: d("2016-06-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -811,7 +834,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2016-06-01",
+    date: d("2016-06-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 400,
@@ -819,7 +842,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-06-15",
+    date: d("2016-06-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -827,7 +850,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-06-20",
+    date: d("2016-06-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 300,
@@ -835,7 +858,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-07-01",
+    date: d("2016-07-01"),
     symbol: "VOD",
     type: "sell",
     quantity: 1500,
@@ -843,7 +866,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-07-10",
+    date: d("2016-07-10"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -852,7 +875,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2016-07-15",
+    date: d("2016-07-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 1500,
@@ -860,7 +883,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-07-20",
+    date: d("2016-07-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 150,
@@ -868,7 +891,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-08-01",
+    date: d("2016-08-01"),
     symbol: "BP",
     type: "sell",
     quantity: 1000,
@@ -876,7 +899,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2016-08-15",
+    date: d("2016-08-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -884,7 +907,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-08-20",
+    date: d("2016-08-20"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 3,
@@ -893,7 +916,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2016-09-01",
+    date: d("2016-09-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 10,
@@ -902,7 +925,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2016-09-15",
+    date: d("2016-09-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 20,
@@ -911,7 +934,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2016-09-20",
+    date: d("2016-09-20"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -919,7 +942,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2016-10-01",
+    date: d("2016-10-01"),
     symbol: "MSFT",
     type: "buy",
     quantity: 20,
@@ -928,7 +951,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2016-10-15",
+    date: d("2016-10-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 2000,
@@ -936,7 +959,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-10-20",
+    date: d("2016-10-20"),
     symbol: "AAPL",
     type: "buy",
     quantity: 5,
@@ -945,7 +968,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2016-11-01",
+    date: d("2016-11-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 15000,
@@ -953,7 +976,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2016-11-15",
+    date: d("2016-11-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 8,
@@ -962,7 +985,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2016-11-20",
+    date: d("2016-11-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 100,
@@ -970,7 +993,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2016-12-01",
+    date: d("2016-12-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 10,
@@ -979,7 +1002,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2016-12-01",
+    date: d("2016-12-01"),
     symbol: "AAPL",
     type: "sell",
     quantity: 10,
@@ -988,7 +1011,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2016-12-15",
+    date: d("2016-12-15"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 5,
@@ -997,7 +1020,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2016-12-20",
+    date: d("2016-12-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 1500,
@@ -1005,7 +1028,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-01-15",
+    date: d("2017-01-15"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -1013,7 +1036,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-01-20",
+    date: d("2017-01-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -1022,7 +1045,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2017-02-15",
+    date: d("2017-02-15"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -1031,7 +1054,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2017-02-20",
+    date: d("2017-02-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 500,
@@ -1039,7 +1062,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-03-01",
+    date: d("2017-03-01"),
     symbol: "VOD",
     type: "sell",
     quantity: 500,
@@ -1047,7 +1070,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-03-10",
+    date: d("2017-03-10"),
     symbol: "NVDA",
     type: "sell",
     quantity: 10,
@@ -1056,7 +1079,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2017-03-15",
+    date: d("2017-03-15"),
     symbol: "TSLA",
     type: "buy",
     quantity: 8,
@@ -1065,7 +1088,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2017-04-10",
+    date: d("2017-04-10"),
     symbol: "NVDA",
     type: "buy",
     quantity: 50,
@@ -1074,7 +1097,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2017-04-15",
+    date: d("2017-04-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 4,
@@ -1083,7 +1106,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2017-04-20",
+    date: d("2017-04-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 2000,
@@ -1091,7 +1114,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-05-01",
+    date: d("2017-05-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 15,
@@ -1100,7 +1123,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2017-05-10",
+    date: d("2017-05-10"),
     symbol: "AMZN",
     type: "sell",
     quantity: 2,
@@ -1109,7 +1132,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2017-05-15",
+    date: d("2017-05-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -1117,7 +1140,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-06-01",
+    date: d("2017-06-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 300,
@@ -1125,7 +1148,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-06-15",
+    date: d("2017-06-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -1133,7 +1156,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-06-20",
+    date: d("2017-06-20"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -1141,7 +1164,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-07-01",
+    date: d("2017-07-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -1149,7 +1172,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2017-07-15",
+    date: d("2017-07-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 500,
@@ -1157,7 +1180,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-07-15",
+    date: d("2017-07-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 3000,
@@ -1165,7 +1188,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-07-20",
+    date: d("2017-07-20"),
     symbol: "AAPL",
     type: "buy",
     quantity: 8,
@@ -1174,7 +1197,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2017-08-01",
+    date: d("2017-08-01"),
     symbol: "MSFT",
     type: "buy",
     quantity: 15,
@@ -1183,7 +1206,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.31,
   },
   {
-    date: "2017-08-01",
+    date: d("2017-08-01"),
     symbol: "MSFT",
     type: "sell",
     quantity: 15,
@@ -1192,7 +1215,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.31,
   },
   {
-    date: "2017-08-15",
+    date: d("2017-08-15"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -1201,7 +1224,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2017-08-20",
+    date: d("2017-08-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -1209,7 +1232,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2017-09-01",
+    date: d("2017-09-01"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 10,
@@ -1218,7 +1241,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2017-09-15",
+    date: d("2017-09-15"),
     symbol: "TSLA",
     type: "buy",
     quantity: 4,
@@ -1227,7 +1250,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2017-10-01",
+    date: d("2017-10-01"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -1235,7 +1258,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-10-15",
+    date: d("2017-10-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 15,
@@ -1244,7 +1267,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2017-10-20",
+    date: d("2017-10-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -1252,7 +1275,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-10-20",
+    date: d("2017-10-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -1261,7 +1284,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2017-11-01",
+    date: d("2017-11-01"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -1269,7 +1292,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-11-15",
+    date: d("2017-11-15"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -1277,7 +1300,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2017-11-20",
+    date: d("2017-11-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 300,
@@ -1285,7 +1308,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2017-12-01",
+    date: d("2017-12-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 400,
@@ -1293,7 +1316,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2017-12-15",
+    date: d("2017-12-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 10,
@@ -1302,7 +1325,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2017-12-20",
+    date: d("2017-12-20"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 3,
@@ -1311,7 +1334,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2018-01-01",
+    date: d("2018-01-01"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 5,
@@ -1320,7 +1343,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2018-01-15",
+    date: d("2018-01-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 30,
@@ -1329,7 +1352,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2018-01-20",
+    date: d("2018-01-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 2,
@@ -1338,7 +1361,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2018-02-01",
+    date: d("2018-02-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 15,
@@ -1347,7 +1370,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2018-02-15",
+    date: d("2018-02-15"),
     symbol: "MSFT",
     type: "buy",
     quantity: 8,
@@ -1356,7 +1379,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2018-02-20",
+    date: d("2018-02-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 1500,
@@ -1364,7 +1387,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2018-03-01",
+    date: d("2018-03-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 5,
@@ -1373,7 +1396,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2018-03-10",
+    date: d("2018-03-10"),
     symbol: "NVDA",
     type: "buy",
     quantity: 10,
@@ -1382,7 +1405,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2018-03-15",
+    date: d("2018-03-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 2000,
@@ -1390,7 +1413,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2018-04-10",
+    date: d("2018-04-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 3000,
@@ -1398,7 +1421,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2018-04-20",
+    date: d("2018-04-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 2,
@@ -1407,7 +1430,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2018-04-25",
+    date: d("2018-04-25"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -1415,7 +1438,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2018-05-01",
+    date: d("2018-05-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 20,
@@ -1424,7 +1447,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2018-05-15",
+    date: d("2018-05-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 4000,
@@ -1432,7 +1455,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2018-05-20",
+    date: d("2018-05-20"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -1440,7 +1463,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2018-06-01",
+    date: d("2018-06-01"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -1448,7 +1471,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2018-06-01",
+    date: d("2018-06-01"),
     symbol: "BP",
     type: "sell",
     quantity: 1000,
@@ -1456,7 +1479,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2018-06-15",
+    date: d("2018-06-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 500,
@@ -1464,7 +1487,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2018-06-20",
+    date: d("2018-06-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 2000,
@@ -1472,7 +1495,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2018-07-01",
+    date: d("2018-07-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 200,
@@ -1480,7 +1503,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2018-07-15",
+    date: d("2018-07-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 20,
@@ -1489,7 +1512,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2018-07-20",
+    date: d("2018-07-20"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 3,
@@ -1498,7 +1521,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2018-07-31",
+    date: d("2018-07-31"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -1506,7 +1529,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2018-08-01",
+    date: d("2018-08-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 10,
@@ -1515,7 +1538,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2018-08-15",
+    date: d("2018-08-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -1523,7 +1546,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2018-08-20",
+    date: d("2018-08-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 150,
@@ -1531,7 +1554,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2018-08-25",
+    date: d("2018-08-25"),
     symbol: "TSLA",
     type: "sell",
     quantity: 5,
@@ -1540,7 +1563,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2018-09-01",
+    date: d("2018-09-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 12,
@@ -1549,7 +1572,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2018-09-15",
+    date: d("2018-09-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -1557,7 +1580,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2018-09-15",
+    date: d("2018-09-15"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 5,
@@ -1566,7 +1589,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2018-09-20",
+    date: d("2018-09-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 100,
@@ -1574,7 +1597,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2018-10-01",
+    date: d("2018-10-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 3,
@@ -1583,7 +1606,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.31,
   },
   {
-    date: "2018-10-15",
+    date: d("2018-10-15"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -1591,7 +1614,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2018-10-20",
+    date: d("2018-10-20"),
     symbol: "AAPL",
     type: "sell",
     quantity: 5,
@@ -1600,7 +1623,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.31,
   },
   {
-    date: "2018-11-01",
+    date: d("2018-11-01"),
     symbol: "LLOY",
     type: "transfer",
     quantity: 5000,
@@ -1608,7 +1631,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2018-11-15",
+    date: d("2018-11-15"),
     symbol: "MSFT",
     type: "buy",
     quantity: 12,
@@ -1617,7 +1640,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2018-11-20",
+    date: d("2018-11-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -1626,7 +1649,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2018-12-01",
+    date: d("2018-12-01"),
     symbol: "MSFT",
     type: "buy",
     quantity: 25,
@@ -1635,7 +1658,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2018-12-15",
+    date: d("2018-12-15"),
     symbol: "TSLA",
     type: "sell",
     quantity: 10,
@@ -1644,7 +1667,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2018-12-20",
+    date: d("2018-12-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 10,
@@ -1653,7 +1676,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2019-01-01",
+    date: d("2019-01-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -1661,7 +1684,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-01-15",
+    date: d("2019-01-15"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 8,
@@ -1670,7 +1693,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2019-01-20",
+    date: d("2019-01-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 500,
@@ -1678,7 +1701,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-02-01",
+    date: d("2019-02-01"),
     symbol: "BP",
     type: "sell",
     quantity: 1500,
@@ -1686,7 +1709,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-02-15",
+    date: d("2019-02-15"),
     symbol: "NVDA",
     type: "sell",
     quantity: 15,
@@ -1695,7 +1718,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2019-02-20",
+    date: d("2019-02-20"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -1703,7 +1726,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-03-01",
+    date: d("2019-03-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -1711,7 +1734,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-03-02",
+    date: d("2019-03-02"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -1719,7 +1742,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2019-03-15",
+    date: d("2019-03-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -1727,7 +1750,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-03-20",
+    date: d("2019-03-20"),
     symbol: "AMZN",
     type: "sell",
     quantity: 2,
@@ -1736,7 +1759,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2019-04-10",
+    date: d("2019-04-10"),
     symbol: "NVDA",
     type: "buy",
     quantity: 40,
@@ -1745,7 +1768,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2019-04-15",
+    date: d("2019-04-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 3,
@@ -1754,7 +1777,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2019-04-20",
+    date: d("2019-04-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 150,
@@ -1762,7 +1785,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-05-01",
+    date: d("2019-05-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 25,
@@ -1771,7 +1794,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2019-05-15",
+    date: d("2019-05-15"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 6,
@@ -1780,7 +1803,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2019-05-20",
+    date: d("2019-05-20"),
     symbol: "NVDA",
     type: "sell",
     quantity: 10,
@@ -1789,7 +1812,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2019-06-01",
+    date: d("2019-06-01"),
     symbol: "TSLA",
     type: "sell",
     quantity: 55,
@@ -1798,7 +1821,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2019-06-15",
+    date: d("2019-06-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -1806,7 +1829,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-06-20",
+    date: d("2019-06-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -1814,7 +1837,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-07-01",
+    date: d("2019-07-01"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 5,
@@ -1823,7 +1846,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2019-07-01",
+    date: d("2019-07-01"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 5,
@@ -1832,7 +1855,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2019-07-15",
+    date: d("2019-07-15"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -1840,7 +1863,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-07-20",
+    date: d("2019-07-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -1848,7 +1871,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-08-01",
+    date: d("2019-08-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 30,
@@ -1857,7 +1880,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2019-08-10",
+    date: d("2019-08-10"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 3,
@@ -1866,7 +1889,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2019-08-15",
+    date: d("2019-08-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -1874,7 +1897,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-08-20",
+    date: d("2019-08-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 8,
@@ -1883,7 +1906,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2019-09-01",
+    date: d("2019-09-01"),
     symbol: "BP",
     type: "buy",
     quantity: 2500,
@@ -1891,7 +1914,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2019-09-15",
+    date: d("2019-09-15"),
     symbol: "SHEL",
     type: "sell",
     quantity: 200,
@@ -1899,7 +1922,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-09-20",
+    date: d("2019-09-20"),
     symbol: "AAPL",
     type: "buy",
     quantity: 10,
@@ -1908,7 +1931,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2019-10-01",
+    date: d("2019-10-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 10000,
@@ -1916,7 +1939,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-10-15",
+    date: d("2019-10-15"),
     symbol: "TSLA",
     type: "buy",
     quantity: 8,
@@ -1925,7 +1948,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2019-10-20",
+    date: d("2019-10-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 2,
@@ -1934,7 +1957,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2019-11-01",
+    date: d("2019-11-01"),
     symbol: "NVDA",
     type: "sell",
     quantity: 30,
@@ -1943,7 +1966,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2019-11-15",
+    date: d("2019-11-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 15,
@@ -1952,7 +1975,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2019-11-20",
+    date: d("2019-11-20"),
     symbol: "BP",
     type: "sell",
     quantity: 800,
@@ -1960,7 +1983,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2019-11-25",
+    date: d("2019-11-25"),
     symbol: "NVDA",
     type: "buy",
     quantity: 30,
@@ -1969,7 +1992,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2019-12-01",
+    date: d("2019-12-01"),
     symbol: "BP",
     type: "transfer",
     quantity: 2000,
@@ -1977,7 +2000,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-12-15",
+    date: d("2019-12-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 3000,
@@ -1985,7 +2008,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2019-12-20",
+    date: d("2019-12-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -1994,7 +2017,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2020-01-01",
+    date: d("2020-01-01"),
     symbol: "NVDA",
     type: "buy",
     quantity: 10,
@@ -2003,7 +2026,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2020-01-10",
+    date: d("2020-01-10"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -2011,7 +2034,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2020-01-15",
+    date: d("2020-01-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 4,
@@ -2020,7 +2043,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.31,
   },
   {
-    date: "2020-01-20",
+    date: d("2020-01-20"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -2029,7 +2052,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.31,
   },
   {
-    date: "2020-02-01",
+    date: d("2020-02-01"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -2038,7 +2061,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2020-02-15",
+    date: d("2020-02-15"),
     symbol: "MSFT",
     type: "sell",
     quantity: 5,
@@ -2047,7 +2070,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.31,
   },
   {
-    date: "2020-02-20",
+    date: d("2020-02-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 500,
@@ -2055,7 +2078,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-03-01",
+    date: d("2020-03-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -2063,7 +2086,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-03-15",
+    date: d("2020-03-15"),
     symbol: "SHEL",
     type: "sell",
     quantity: 400,
@@ -2071,7 +2094,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2020-04-10",
+    date: d("2020-04-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 5000,
@@ -2079,7 +2102,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-04-15",
+    date: d("2020-04-15"),
     symbol: "BP",
     type: "buy",
     quantity: 5000,
@@ -2087,7 +2110,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2020-04-20",
+    date: d("2020-04-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 20000,
@@ -2095,7 +2118,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-04-25",
+    date: d("2020-04-25"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 8,
@@ -2104,7 +2127,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2020-04-30",
+    date: d("2020-04-30"),
     symbol: "TSLA",
     type: "buy",
     quantity: 3,
@@ -2113,7 +2136,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2020-05-01",
+    date: d("2020-05-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 600,
@@ -2121,7 +2144,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2020-05-15",
+    date: d("2020-05-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 2,
@@ -2130,7 +2153,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2020-05-20",
+    date: d("2020-05-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 3000,
@@ -2138,7 +2161,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-06-01",
+    date: d("2020-06-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -2146,7 +2169,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-06-01",
+    date: d("2020-06-01"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -2154,7 +2177,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-06-15",
+    date: d("2020-06-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 30,
@@ -2163,7 +2186,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2020-06-15",
+    date: d("2020-06-15"),
     symbol: "BP",
     type: "sell",
     quantity: 1500,
@@ -2171,7 +2194,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2020-06-20",
+    date: d("2020-06-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -2179,7 +2202,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2020-07-01",
+    date: d("2020-07-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 10,
@@ -2188,7 +2211,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2020-07-10",
+    date: d("2020-07-10"),
     symbol: "AAPL",
     type: "sell",
     quantity: 10,
@@ -2197,7 +2220,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2020-07-15",
+    date: d("2020-07-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 3,
@@ -2206,7 +2229,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2020-07-20",
+    date: d("2020-07-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -2215,7 +2238,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2020-08-01",
+    date: d("2020-08-01"),
     symbol: "NVDA",
     type: "buy",
     quantity: 25,
@@ -2224,7 +2247,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2020-08-10",
+    date: d("2020-08-10"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -2232,7 +2255,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2020-08-15",
+    date: d("2020-08-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 1500,
@@ -2240,7 +2263,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-09-01",
+    date: d("2020-09-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -2249,7 +2272,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2020-09-15",
+    date: d("2020-09-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 100,
@@ -2258,7 +2281,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2020-09-20",
+    date: d("2020-09-20"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 5,
@@ -2267,7 +2290,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2020-10-01",
+    date: d("2020-10-01"),
     symbol: "AAPL",
     type: "sell",
     quantity: 50,
@@ -2276,7 +2299,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2020-10-10",
+    date: d("2020-10-10"),
     symbol: "MSFT",
     type: "sell",
     quantity: 5,
@@ -2285,7 +2308,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2020-10-15",
+    date: d("2020-10-15"),
     symbol: "SHEL",
     type: "sell",
     quantity: 300,
@@ -2293,7 +2316,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2020-10-20",
+    date: d("2020-10-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -2301,7 +2324,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-11-01",
+    date: d("2020-11-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 40,
@@ -2310,7 +2333,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2020-11-10",
+    date: d("2020-11-10"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -2318,7 +2341,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2020-11-15",
+    date: d("2020-11-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 10000,
@@ -2326,7 +2349,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-11-20",
+    date: d("2020-11-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 2,
@@ -2335,7 +2358,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2020-12-01",
+    date: d("2020-12-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 3000,
@@ -2343,7 +2366,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2020-12-01",
+    date: d("2020-12-01"),
     symbol: "NVDA",
     type: "sell",
     quantity: 20,
@@ -2352,7 +2375,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2020-12-10",
+    date: d("2020-12-10"),
     symbol: "TSLA",
     type: "sell",
     quantity: 5,
@@ -2361,7 +2384,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2020-12-15",
+    date: d("2020-12-15"),
     symbol: "VOD",
     type: "transfer",
     quantity: 2000,
@@ -2369,7 +2392,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-01-01",
+    date: d("2021-01-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -2377,7 +2400,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2021-01-15",
+    date: d("2021-01-15"),
     symbol: "MSFT",
     type: "buy",
     quantity: 15,
@@ -2386,7 +2409,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-01-20",
+    date: d("2021-01-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 1500,
@@ -2394,7 +2417,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-02-01",
+    date: d("2021-02-01"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 10,
@@ -2403,7 +2426,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2021-02-15",
+    date: d("2021-02-15"),
     symbol: "AMZN",
     type: "sell",
     quantity: 5,
@@ -2412,7 +2435,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-02-20",
+    date: d("2021-02-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -2420,7 +2443,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2021-03-01",
+    date: d("2021-03-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 15,
@@ -2429,7 +2452,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-03-15",
+    date: d("2021-03-15"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -2437,7 +2460,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2021-03-20",
+    date: d("2021-03-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 15,
@@ -2446,7 +2469,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-04-15",
+    date: d("2021-04-15"),
     symbol: "AAPL",
     type: "sell",
     quantity: 100,
@@ -2455,7 +2478,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2021-04-20",
+    date: d("2021-04-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -2463,7 +2486,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-04-25",
+    date: d("2021-04-25"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -2472,7 +2495,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2021-05-01",
+    date: d("2021-05-01"),
     symbol: "MSFT",
     type: "sell",
     quantity: 30,
@@ -2481,7 +2504,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-05-15",
+    date: d("2021-05-15"),
     symbol: "SHEL",
     type: "sell",
     quantity: 200,
@@ -2489,7 +2512,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2021-05-20",
+    date: d("2021-05-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 2000,
@@ -2497,7 +2520,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-06-01",
+    date: d("2021-06-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -2506,7 +2529,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2021-06-01",
+    date: d("2021-06-01"),
     symbol: "TSLA",
     type: "sell",
     quantity: 5,
@@ -2515,7 +2538,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2021-06-15",
+    date: d("2021-06-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 20,
@@ -2524,7 +2547,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-06-20",
+    date: d("2021-06-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -2532,7 +2555,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-06-25",
+    date: d("2021-06-25"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -2540,7 +2563,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2021-07-01",
+    date: d("2021-07-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 6,
@@ -2549,7 +2572,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2021-07-01",
+    date: d("2021-07-01"),
     symbol: "AAPL",
     type: "sell",
     quantity: 30,
@@ -2558,7 +2581,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2021-07-15",
+    date: d("2021-07-15"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 10,
@@ -2567,7 +2590,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2021-07-20",
+    date: d("2021-07-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -2575,7 +2598,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-08-01",
+    date: d("2021-08-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 500,
@@ -2583,7 +2606,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2021-08-15",
+    date: d("2021-08-15"),
     symbol: "TSLA",
     type: "sell",
     quantity: 10,
@@ -2592,7 +2615,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-08-20",
+    date: d("2021-08-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 2,
@@ -2601,7 +2624,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-09-01",
+    date: d("2021-09-01"),
     symbol: "BP",
     type: "buy",
     quantity: 3000,
@@ -2609,7 +2632,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2021-09-15",
+    date: d("2021-09-15"),
     symbol: "BP",
     type: "sell",
     quantity: 2000,
@@ -2617,7 +2640,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2021-09-15",
+    date: d("2021-09-15"),
     symbol: "MSFT",
     type: "buy",
     quantity: 8,
@@ -2626,7 +2649,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-09-20",
+    date: d("2021-09-20"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 5,
@@ -2635,7 +2658,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-10-10",
+    date: d("2021-10-10"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -2643,7 +2666,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2021-10-15",
+    date: d("2021-10-15"),
     symbol: "NVDA",
     type: "sell",
     quantity: 15,
@@ -2652,7 +2675,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-10-20",
+    date: d("2021-10-20"),
     symbol: "AAPL",
     type: "buy",
     quantity: 20,
@@ -2661,7 +2684,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.34,
   },
   {
-    date: "2021-11-01",
+    date: d("2021-11-01"),
     symbol: "LLOY",
     type: "sell",
     quantity: 8000,
@@ -2669,7 +2692,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-11-15",
+    date: d("2021-11-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 3,
@@ -2678,7 +2701,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-11-20",
+    date: d("2021-11-20"),
     symbol: "MSFT",
     type: "sell",
     quantity: 5,
@@ -2687,7 +2710,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.35,
   },
   {
-    date: "2021-11-29",
+    date: d("2021-11-29"),
     symbol: "LLOY",
     type: "buy",
     quantity: 8000,
@@ -2695,7 +2718,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-12-01",
+    date: d("2021-12-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 10000,
@@ -2703,7 +2726,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2021-12-15",
+    date: d("2021-12-15"),
     symbol: "BP",
     type: "sell",
     quantity: 1000,
@@ -2711,7 +2734,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2021-12-20",
+    date: d("2021-12-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -2719,7 +2742,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2022-01-01",
+    date: d("2022-01-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 25,
@@ -2728,7 +2751,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2022-01-15",
+    date: d("2022-01-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 12000,
@@ -2736,7 +2759,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-01-20",
+    date: d("2022-01-20"),
     symbol: "TSLA",
     type: "sell",
     quantity: 5,
@@ -2745,7 +2768,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2022-02-01",
+    date: d("2022-02-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 50,
@@ -2754,7 +2777,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2022-02-01",
+    date: d("2022-02-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 30,
@@ -2763,7 +2786,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2022-02-15",
+    date: d("2022-02-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -2771,7 +2794,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-02-20",
+    date: d("2022-02-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 10,
@@ -2780,7 +2803,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2022-03-01",
+    date: d("2022-03-01"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 10,
@@ -2789,7 +2812,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.32,
   },
   {
-    date: "2022-03-10",
+    date: d("2022-03-10"),
     symbol: "AMZN",
     type: "sell",
     quantity: 3,
@@ -2798,7 +2821,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2022-03-15",
+    date: d("2022-03-15"),
     symbol: "TSLA",
     type: "buy",
     quantity: 15,
@@ -2807,7 +2830,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.33,
   },
   {
-    date: "2022-03-20",
+    date: d("2022-03-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 4000,
@@ -2815,7 +2838,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-04-05",
+    date: d("2022-04-05"),
     symbol: "VOD",
     type: "sell",
     quantity: 2000,
@@ -2823,7 +2846,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2022-04-06",
+    date: d("2022-04-06"),
     symbol: "VOD",
     type: "buy",
     quantity: 3000,
@@ -2831,7 +2854,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-04-10",
+    date: d("2022-04-10"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -2839,7 +2862,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2022-04-15",
+    date: d("2022-04-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 1500,
@@ -2847,7 +2870,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-04-20",
+    date: d("2022-04-20"),
     symbol: "MSFT",
     type: "sell",
     quantity: 10,
@@ -2856,7 +2879,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-04-25",
+    date: d("2022-04-25"),
     symbol: "NVDA",
     type: "sell",
     quantity: 10,
@@ -2865,7 +2888,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-05-01",
+    date: d("2022-05-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 3,
@@ -2874,7 +2897,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2022-05-01",
+    date: d("2022-05-01"),
     symbol: "AMZN",
     type: "sell",
     quantity: 3,
@@ -2883,7 +2906,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2022-05-15",
+    date: d("2022-05-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 8,
@@ -2892,7 +2915,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2022-05-20",
+    date: d("2022-05-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -2900,7 +2923,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-05-25",
+    date: d("2022-05-25"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -2908,7 +2931,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-06-15",
+    date: d("2022-06-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 200,
@@ -2917,7 +2940,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2022-06-20",
+    date: d("2022-06-20"),
     symbol: "AMZN",
     type: "sell",
     quantity: 100,
@@ -2926,7 +2949,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2022-06-20",
+    date: d("2022-06-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -2934,7 +2957,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-06-25",
+    date: d("2022-06-25"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -2942,7 +2965,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2022-07-01",
+    date: d("2022-07-01"),
     symbol: "AAPL",
     type: "sell",
     quantity: 30,
@@ -2951,7 +2974,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.2,
   },
   {
-    date: "2022-07-15",
+    date: d("2022-07-15"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -2959,7 +2982,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2022-07-20",
+    date: d("2022-07-20"),
     symbol: "TSLA",
     type: "buy",
     quantity: 15,
@@ -2968,7 +2991,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.2,
   },
   {
-    date: "2022-07-25",
+    date: d("2022-07-25"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 100,
@@ -2977,7 +3000,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.2,
   },
   {
-    date: "2022-08-01",
+    date: d("2022-08-01"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 50,
@@ -2986,7 +3009,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.21,
   },
   {
-    date: "2022-08-15",
+    date: d("2022-08-15"),
     symbol: "TSLA",
     type: "sell",
     quantity: 20,
@@ -2995,7 +3018,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.2,
   },
   {
-    date: "2022-08-20",
+    date: d("2022-08-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 800,
@@ -3003,7 +3026,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-09-01",
+    date: d("2022-09-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 50,
@@ -3012,7 +3035,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-09-15",
+    date: d("2022-09-15"),
     symbol: "NVDA",
     type: "sell",
     quantity: 40,
@@ -3021,7 +3044,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.2,
   },
   {
-    date: "2022-09-20",
+    date: d("2022-09-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -3030,7 +3053,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.2,
   },
   {
-    date: "2022-09-25",
+    date: d("2022-09-25"),
     symbol: "AAPL",
     type: "buy",
     quantity: 20,
@@ -3039,7 +3062,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-10-01",
+    date: d("2022-10-01"),
     symbol: "NVDA",
     type: "buy",
     quantity: 20,
@@ -3048,7 +3071,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-10-05",
+    date: d("2022-10-05"),
     symbol: "NVDA",
     type: "buy",
     quantity: 40,
@@ -3057,7 +3080,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-10-15",
+    date: d("2022-10-15"),
     symbol: "SHEL",
     type: "transfer",
     quantity: 200,
@@ -3065,7 +3088,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-10-20",
+    date: d("2022-10-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 150,
@@ -3073,7 +3096,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2022-10-25",
+    date: d("2022-10-25"),
     symbol: "MSFT",
     type: "sell",
     quantity: 5,
@@ -3082,7 +3105,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-11-01",
+    date: d("2022-11-01"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -3090,7 +3113,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2022-11-15",
+    date: d("2022-11-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -3098,7 +3121,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2022-11-20",
+    date: d("2022-11-20"),
     symbol: "AAPL",
     type: "buy",
     quantity: 30,
@@ -3107,7 +3130,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2022-11-25",
+    date: d("2022-11-25"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 40,
@@ -3116,7 +3139,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.21,
   },
   {
-    date: "2022-12-01",
+    date: d("2022-12-01"),
     symbol: "BP",
     type: "sell",
     quantity: 1500,
@@ -3124,7 +3147,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2022-12-15",
+    date: d("2022-12-15"),
     symbol: "MSFT",
     type: "buy",
     quantity: 20,
@@ -3133,7 +3156,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.21,
   },
   {
-    date: "2022-12-15",
+    date: d("2022-12-15"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 30,
@@ -3142,7 +3165,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.21,
   },
   {
-    date: "2022-12-20",
+    date: d("2022-12-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -3150,7 +3173,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2023-01-01",
+    date: d("2023-01-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 20,
@@ -3159,7 +3182,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2023-01-15",
+    date: d("2023-01-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 40,
@@ -3168,7 +3191,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2023-01-15",
+    date: d("2023-01-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -3176,7 +3199,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-01-20",
+    date: d("2023-01-20"),
     symbol: "BP",
     type: "buy",
     quantity: 800,
@@ -3184,7 +3207,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-02-01",
+    date: d("2023-02-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 30,
@@ -3193,7 +3216,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2023-02-15",
+    date: d("2023-02-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 10000,
@@ -3201,7 +3224,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-02-15",
+    date: d("2023-02-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 40,
@@ -3210,7 +3233,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2023-02-20",
+    date: d("2023-02-20"),
     symbol: "TSLA",
     type: "sell",
     quantity: 10,
@@ -3219,7 +3242,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2023-03-01",
+    date: d("2023-03-01"),
     symbol: "NVDA",
     type: "buy",
     quantity: 30,
@@ -3228,7 +3251,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2023-03-01",
+    date: d("2023-03-01"),
     symbol: "BP",
     type: "sell",
     quantity: 800,
@@ -3236,7 +3259,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-03-15",
+    date: d("2023-03-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -3244,7 +3267,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-03-15",
+    date: d("2023-03-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 3000,
@@ -3252,7 +3275,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-04-10",
+    date: d("2023-04-10"),
     symbol: "SHEL",
     type: "buy",
     quantity: 400,
@@ -3260,7 +3283,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-04-15",
+    date: d("2023-04-15"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 80,
@@ -3269,7 +3292,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2023-04-20",
+    date: d("2023-04-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 15,
@@ -3278,7 +3301,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2023-04-25",
+    date: d("2023-04-25"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -3286,7 +3309,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-05-01",
+    date: d("2023-05-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 150,
@@ -3295,7 +3318,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2023-05-05",
+    date: d("2023-05-05"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -3303,7 +3326,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-05-10",
+    date: d("2023-05-10"),
     symbol: "NVDA",
     type: "sell",
     quantity: 10,
@@ -3312,7 +3335,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2023-05-15",
+    date: d("2023-05-15"),
     symbol: "AAPL",
     type: "sell",
     quantity: 80,
@@ -3321,7 +3344,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2023-05-20",
+    date: d("2023-05-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -3330,7 +3353,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2023-06-01",
+    date: d("2023-06-01"),
     symbol: "TSLA",
     type: "sell",
     quantity: 15,
@@ -3339,7 +3362,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2023-06-10",
+    date: d("2023-06-10"),
     symbol: "AAPL",
     type: "buy",
     quantity: 80,
@@ -3348,7 +3371,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2023-06-15",
+    date: d("2023-06-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 3000,
@@ -3356,7 +3379,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-06-15",
+    date: d("2023-06-15"),
     symbol: "BP",
     type: "sell",
     quantity: 2000,
@@ -3364,7 +3387,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-06-15",
+    date: d("2023-06-15"),
     symbol: "MSFT",
     type: "sell",
     quantity: 10,
@@ -3373,7 +3396,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2023-06-20",
+    date: d("2023-06-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 150,
@@ -3381,7 +3404,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-06-25",
+    date: d("2023-06-25"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -3389,7 +3412,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-07-01",
+    date: d("2023-07-01"),
     symbol: "NVDA",
     type: "buy",
     quantity: 20,
@@ -3398,7 +3421,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2023-07-01",
+    date: d("2023-07-01"),
     symbol: "NVDA",
     type: "sell",
     quantity: 20,
@@ -3407,7 +3430,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2023-07-10",
+    date: d("2023-07-10"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -3415,7 +3438,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2023-07-15",
+    date: d("2023-07-15"),
     symbol: "TSLA",
     type: "buy",
     quantity: 25,
@@ -3424,7 +3447,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2023-07-15",
+    date: d("2023-07-15"),
     symbol: "AAPL",
     type: "sell",
     quantity: 20,
@@ -3433,7 +3456,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2023-07-20",
+    date: d("2023-07-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 1500,
@@ -3441,7 +3464,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-08-01",
+    date: d("2023-08-01"),
     symbol: "MSFT",
     type: "buy",
     quantity: 15,
@@ -3450,7 +3473,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2023-08-10",
+    date: d("2023-08-10"),
     symbol: "TSLA",
     type: "buy",
     quantity: 8,
@@ -3459,7 +3482,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2023-08-15",
+    date: d("2023-08-15"),
     symbol: "LLOY",
     type: "buy",
     quantity: 8000,
@@ -3467,7 +3490,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-08-20",
+    date: d("2023-08-20"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -3475,7 +3498,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2023-09-01",
+    date: d("2023-09-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 300,
@@ -3483,7 +3506,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-09-15",
+    date: d("2023-09-15"),
     symbol: "AMZN",
     type: "sell",
     quantity: 30,
@@ -3492,7 +3515,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2023-09-20",
+    date: d("2023-09-20"),
     symbol: "AAPL",
     type: "sell",
     quantity: 15,
@@ -3501,7 +3524,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2023-10-01",
+    date: d("2023-10-01"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -3509,7 +3532,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2023-10-01",
+    date: d("2023-10-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 10,
@@ -3518,7 +3541,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2023-10-15",
+    date: d("2023-10-15"),
     symbol: "GOOGL",
     type: "transfer",
     quantity: 50,
@@ -3527,7 +3550,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2023-10-20",
+    date: d("2023-10-20"),
     symbol: "NVDA",
     type: "sell",
     quantity: 10,
@@ -3536,7 +3559,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2023-10-20",
+    date: d("2023-10-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -3545,7 +3568,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2023-11-01",
+    date: d("2023-11-01"),
     symbol: "TSLA",
     type: "sell",
     quantity: 40,
@@ -3554,7 +3577,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2023-11-01",
+    date: d("2023-11-01"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -3562,7 +3585,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-11-10",
+    date: d("2023-11-10"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -3570,7 +3593,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-11-15",
+    date: d("2023-11-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 4000,
@@ -3578,7 +3601,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2023-11-20",
+    date: d("2023-11-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -3586,7 +3609,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2023-12-01",
+    date: d("2023-12-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 30,
@@ -3595,7 +3618,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2023-12-10",
+    date: d("2023-12-10"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 20,
@@ -3604,7 +3627,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2023-12-15",
+    date: d("2023-12-15"),
     symbol: "BP",
     type: "buy",
     quantity: 3000,
@@ -3612,7 +3635,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2023-12-20",
+    date: d("2023-12-20"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 30,
@@ -3621,7 +3644,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2024-01-01",
+    date: d("2024-01-01"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -3629,7 +3652,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-01-05",
+    date: d("2024-01-05"),
     symbol: "VOD",
     type: "sell",
     quantity: 800,
@@ -3637,7 +3660,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-01-10",
+    date: d("2024-01-10"),
     symbol: "AAPL",
     type: "buy",
     quantity: 15,
@@ -3646,7 +3669,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-01-15",
+    date: d("2024-01-15"),
     symbol: "MSFT",
     type: "sell",
     quantity: 20,
@@ -3655,7 +3678,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-01-20",
+    date: d("2024-01-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 20,
@@ -3664,7 +3687,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-02-01",
+    date: d("2024-02-01"),
     symbol: "BP",
     type: "sell",
     quantity: 500,
@@ -3672,7 +3695,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2024-02-05",
+    date: d("2024-02-05"),
     symbol: "LLOY",
     type: "sell",
     quantity: 2000,
@@ -3680,7 +3703,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-02-10",
+    date: d("2024-02-10"),
     symbol: "MSFT",
     type: "buy",
     quantity: 20,
@@ -3689,7 +3712,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2024-02-15",
+    date: d("2024-02-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 25,
@@ -3698,7 +3721,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-02-20",
+    date: d("2024-02-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 8,
@@ -3707,7 +3730,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2024-03-01",
+    date: d("2024-03-01"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 60,
@@ -3716,7 +3739,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2024-03-01",
+    date: d("2024-03-01"),
     symbol: "TSLA",
     type: "sell",
     quantity: 10,
@@ -3725,7 +3748,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2024-03-15",
+    date: d("2024-03-15"),
     symbol: "AMZN",
     type: "buy",
     quantity: 80,
@@ -3734,7 +3757,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-03-20",
+    date: d("2024-03-20"),
     symbol: "NVDA",
     type: "buy",
     quantity: 10,
@@ -3743,7 +3766,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-04-10",
+    date: d("2024-04-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 5000,
@@ -3751,7 +3774,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-04-15",
+    date: d("2024-04-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -3759,7 +3782,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2024-04-20",
+    date: d("2024-04-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 8000,
@@ -3767,7 +3790,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-04-25",
+    date: d("2024-04-25"),
     symbol: "TSLA",
     type: "buy",
     quantity: 10,
@@ -3776,7 +3799,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2024-05-01",
+    date: d("2024-05-01"),
     symbol: "BP",
     type: "buy",
     quantity: 2000,
@@ -3784,7 +3807,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2024-05-05",
+    date: d("2024-05-05"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 20,
@@ -3793,7 +3816,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2024-05-10",
+    date: d("2024-05-10"),
     symbol: "TSLA",
     type: "buy",
     quantity: 15,
@@ -3802,7 +3825,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2024-05-15",
+    date: d("2024-05-15"),
     symbol: "AAPL",
     type: "sell",
     quantity: 60,
@@ -3811,7 +3834,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-05-20",
+    date: d("2024-05-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 100,
@@ -3819,7 +3842,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2024-06-01",
+    date: d("2024-06-01"),
     symbol: "NVDA",
     type: "sell",
     quantity: 30,
@@ -3828,7 +3851,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-06-15",
+    date: d("2024-06-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 100,
@@ -3837,7 +3860,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2024-06-15",
+    date: d("2024-06-15"),
     symbol: "SHEL",
     type: "sell",
     quantity: 200,
@@ -3845,7 +3868,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2024-06-20",
+    date: d("2024-06-20"),
     symbol: "AMZN",
     type: "buy",
     quantity: 30,
@@ -3854,7 +3877,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2024-06-25",
+    date: d("2024-06-25"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -3863,7 +3886,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-07-01",
+    date: d("2024-07-01"),
     symbol: "NVDA",
     type: "sell",
     quantity: 50,
@@ -3872,7 +3895,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2024-07-05",
+    date: d("2024-07-05"),
     symbol: "AAPL",
     type: "sell",
     quantity: 25,
@@ -3881,7 +3904,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-07-10",
+    date: d("2024-07-10"),
     symbol: "BP",
     type: "buy",
     quantity: 1000,
@@ -3889,7 +3912,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2024-07-15",
+    date: d("2024-07-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 2000,
@@ -3897,7 +3920,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-07-20",
+    date: d("2024-07-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 3000,
@@ -3905,7 +3928,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-08-01",
+    date: d("2024-08-01"),
     symbol: "VOD",
     type: "sell",
     quantity: 2000,
@@ -3913,7 +3936,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-08-10",
+    date: d("2024-08-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -3921,7 +3944,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-08-15",
+    date: d("2024-08-15"),
     symbol: "SHEL",
     type: "sell",
     quantity: 500,
@@ -3929,7 +3952,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2024-08-20",
+    date: d("2024-08-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 5,
@@ -3938,7 +3961,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2024-08-25",
+    date: d("2024-08-25"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 15,
@@ -3947,7 +3970,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2024-09-01",
+    date: d("2024-09-01"),
     symbol: "BP",
     type: "sell",
     quantity: 3000,
@@ -3955,7 +3978,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2024-09-10",
+    date: d("2024-09-10"),
     symbol: "VOD",
     type: "sell",
     quantity: 1500,
@@ -3963,7 +3986,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-09-15",
+    date: d("2024-09-15"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 80,
@@ -3972,7 +3995,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2024-09-20",
+    date: d("2024-09-20"),
     symbol: "LLOY",
     type: "sell",
     quantity: 4000,
@@ -3980,7 +4003,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-10-01",
+    date: d("2024-10-01"),
     symbol: "AMZN",
     type: "buy",
     quantity: 50,
@@ -3989,7 +4012,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2024-10-01",
+    date: d("2024-10-01"),
     symbol: "AMZN",
     type: "sell",
     quantity: 50,
@@ -3998,7 +4021,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2024-10-10",
+    date: d("2024-10-10"),
     symbol: "NVDA",
     type: "buy",
     quantity: 50,
@@ -4007,7 +4030,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2024-10-15",
+    date: d("2024-10-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 10,
@@ -4016,7 +4039,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2024-10-25",
+    date: d("2024-10-25"),
     symbol: "NVDA",
     type: "sell",
     quantity: 30,
@@ -4025,7 +4048,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2024-10-29",
+    date: d("2024-10-29"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -4033,7 +4056,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-10-30",
+    date: d("2024-10-30"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -4041,7 +4064,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-11-01",
+    date: d("2024-11-01"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -4050,7 +4073,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2024-11-05",
+    date: d("2024-11-05"),
     symbol: "AMZN",
     type: "sell",
     quantity: 40,
@@ -4059,7 +4082,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2024-11-10",
+    date: d("2024-11-10"),
     symbol: "BP",
     type: "buy",
     quantity: 500,
@@ -4067,7 +4090,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2024-11-15",
+    date: d("2024-11-15"),
     symbol: "TSLA",
     type: "sell",
     quantity: 30,
@@ -4076,7 +4099,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2024-11-20",
+    date: d("2024-11-20"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 25,
@@ -4085,7 +4108,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2024-11-25",
+    date: d("2024-11-25"),
     symbol: "TSLA",
     type: "sell",
     quantity: 10,
@@ -4094,7 +4117,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.22,
   },
   {
-    date: "2024-12-01",
+    date: d("2024-12-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 300,
@@ -4102,7 +4125,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2024-12-10",
+    date: d("2024-12-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -4110,7 +4133,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2024-12-15",
+    date: d("2024-12-15"),
     symbol: "BP",
     type: "sell",
     quantity: 1500,
@@ -4118,7 +4141,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2024-12-20",
+    date: d("2024-12-20"),
     symbol: "SHEL",
     type: "buy",
     quantity: 300,
@@ -4126,7 +4149,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 11.95,
   },
   {
-    date: "2025-01-01",
+    date: d("2025-01-01"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -4134,7 +4157,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-01-05",
+    date: d("2025-01-05"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 10,
@@ -4143,7 +4166,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2025-01-10",
+    date: d("2025-01-10"),
     symbol: "TSLA",
     type: "sell",
     quantity: 15,
@@ -4152,7 +4175,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2025-01-15",
+    date: d("2025-01-15"),
     symbol: "AMZN",
     type: "sell",
     quantity: 100,
@@ -4161,7 +4184,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2025-01-20",
+    date: d("2025-01-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 3000,
@@ -4169,7 +4192,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-01-25",
+    date: d("2025-01-25"),
     symbol: "SHEL",
     type: "buy",
     quantity: 150,
@@ -4177,7 +4200,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-02-01",
+    date: d("2025-02-01"),
     symbol: "MSFT",
     type: "sell",
     quantity: 15,
@@ -4186,7 +4209,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2025-02-10",
+    date: d("2025-02-10"),
     symbol: "NVDA",
     type: "sell",
     quantity: 100,
@@ -4195,7 +4218,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2025-02-15",
+    date: d("2025-02-15"),
     symbol: "AAPL",
     type: "buy",
     quantity: 40,
@@ -4204,7 +4227,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2025-02-20",
+    date: d("2025-02-20"),
     symbol: "VOD",
     type: "buy",
     quantity: 3000,
@@ -4212,7 +4235,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-03-01",
+    date: d("2025-03-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 20,
@@ -4221,7 +4244,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.23,
   },
   {
-    date: "2025-03-05",
+    date: d("2025-03-05"),
     symbol: "AAPL",
     type: "buy",
     quantity: 20,
@@ -4230,7 +4253,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2025-03-10",
+    date: d("2025-03-10"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -4238,7 +4261,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-03-15",
+    date: d("2025-03-15"),
     symbol: "BP",
     type: "sell",
     quantity: 2000,
@@ -4246,7 +4269,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-04-10",
+    date: d("2025-04-10"),
     symbol: "VOD",
     type: "buy",
     quantity: 3000,
@@ -4254,7 +4277,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-04-15",
+    date: d("2025-04-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 200,
@@ -4262,7 +4285,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-04-20",
+    date: d("2025-04-20"),
     symbol: "BP",
     type: "buy",
     quantity: 1500,
@@ -4270,7 +4293,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 12.5,
   },
   {
-    date: "2025-04-25",
+    date: d("2025-04-25"),
     symbol: "AMZN",
     type: "buy",
     quantity: 20,
@@ -4279,7 +4302,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-04-30",
+    date: d("2025-04-30"),
     symbol: "LLOY",
     type: "buy",
     quantity: 3000,
@@ -4287,7 +4310,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-05-01",
+    date: d("2025-05-01"),
     symbol: "AAPL",
     type: "buy",
     quantity: 20,
@@ -4296,7 +4319,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2025-05-03",
+    date: d("2025-05-03"),
     symbol: "BP",
     type: "sell",
     quantity: 1000,
@@ -4304,7 +4327,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-05-05",
+    date: d("2025-05-05"),
     symbol: "MSFT",
     type: "buy",
     quantity: 10,
@@ -4313,7 +4336,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2025-05-08",
+    date: d("2025-05-08"),
     symbol: "NVDA",
     type: "sell",
     quantity: 20,
@@ -4322,7 +4345,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-05-10",
+    date: d("2025-05-10"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 50,
@@ -4331,7 +4354,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2025-05-15",
+    date: d("2025-05-15"),
     symbol: "NVDA",
     type: "sell",
     quantity: 200,
@@ -4340,7 +4363,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-05-20",
+    date: d("2025-05-20"),
     symbol: "LLOY",
     type: "buy",
     quantity: 5000,
@@ -4348,7 +4371,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-05-25",
+    date: d("2025-05-25"),
     symbol: "MSFT",
     type: "sell",
     quantity: 10,
@@ -4357,7 +4380,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2025-05-25",
+    date: d("2025-05-25"),
     symbol: "VOD",
     type: "buy",
     quantity: 1000,
@@ -4365,7 +4388,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-06-01",
+    date: d("2025-06-01"),
     symbol: "TSLA",
     type: "sell",
     quantity: 25,
@@ -4374,7 +4397,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2025-06-05",
+    date: d("2025-06-05"),
     symbol: "TSLA",
     type: "buy",
     quantity: 10,
@@ -4383,7 +4406,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2025-06-10",
+    date: d("2025-06-10"),
     symbol: "BP",
     type: "sell",
     quantity: 800,
@@ -4391,7 +4414,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-06-15",
+    date: d("2025-06-15"),
     symbol: "AAPL",
     type: "sell",
     quantity: 5,
@@ -4400,7 +4423,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2025-06-15",
+    date: d("2025-06-15"),
     symbol: "TSLA",
     type: "buy",
     quantity: 5,
@@ -4409,7 +4432,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2025-06-20",
+    date: d("2025-06-20"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 30,
@@ -4418,7 +4441,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-06-25",
+    date: d("2025-06-25"),
     symbol: "NVDA",
     type: "buy",
     quantity: 30,
@@ -4427,7 +4450,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2025-06-25",
+    date: d("2025-06-25"),
     symbol: "AAPL",
     type: "sell",
     quantity: 10,
@@ -4436,7 +4459,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2025-07-01",
+    date: d("2025-07-01"),
     symbol: "GOOGL",
     type: "sell",
     quantity: 40,
@@ -4445,7 +4468,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.28,
   },
   {
-    date: "2025-07-05",
+    date: d("2025-07-05"),
     symbol: "AMZN",
     type: "buy",
     quantity: 15,
@@ -4454,7 +4477,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-07-10",
+    date: d("2025-07-10"),
     symbol: "AAPL",
     type: "sell",
     quantity: 20,
@@ -4463,7 +4486,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2025-07-15",
+    date: d("2025-07-15"),
     symbol: "VOD",
     type: "sell",
     quantity: 2000,
@@ -4471,7 +4494,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-07-15",
+    date: d("2025-07-15"),
     symbol: "VOD",
     type: "buy",
     quantity: 2000,
@@ -4479,7 +4502,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-07-20",
+    date: d("2025-07-20"),
     symbol: "SHEL",
     type: "sell",
     quantity: 200,
@@ -4487,7 +4510,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-07-25",
+    date: d("2025-07-25"),
     symbol: "MSFT",
     type: "sell",
     quantity: 5,
@@ -4496,7 +4519,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2025-08-01",
+    date: d("2025-08-01"),
     symbol: "AMZN",
     type: "sell",
     quantity: 80,
@@ -4505,7 +4528,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2025-08-01",
+    date: d("2025-08-01"),
     symbol: "BP",
     type: "buy",
     quantity: 800,
@@ -4513,7 +4536,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-08-05",
+    date: d("2025-08-05"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 10,
@@ -4522,7 +4545,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-08-10",
+    date: d("2025-08-10"),
     symbol: "AMZN",
     type: "sell",
     quantity: 30,
@@ -4531,7 +4554,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.26,
   },
   {
-    date: "2025-08-15",
+    date: d("2025-08-15"),
     symbol: "BP",
     type: "buy",
     quantity: 500,
@@ -4539,7 +4562,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2025-08-15",
+    date: d("2025-08-15"),
     symbol: "BP",
     type: "buy",
     quantity: 700,
@@ -4547,7 +4570,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2025-08-15",
+    date: d("2025-08-15"),
     symbol: "BP",
     type: "buy",
     quantity: 300,
@@ -4555,7 +4578,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2025-08-20",
+    date: d("2025-08-20"),
     symbol: "MSFT",
     type: "buy",
     quantity: 8,
@@ -4564,7 +4587,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.29,
   },
   {
-    date: "2025-08-25",
+    date: d("2025-08-25"),
     symbol: "LLOY",
     type: "sell",
     quantity: 3000,
@@ -4572,7 +4595,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-09-01",
+    date: d("2025-09-01"),
     symbol: "SHEL",
     type: "sell",
     quantity: 300,
@@ -4580,7 +4603,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-09-05",
+    date: d("2025-09-05"),
     symbol: "SHEL",
     type: "buy",
     quantity: 80,
@@ -4588,7 +4611,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2025-09-10",
+    date: d("2025-09-10"),
     symbol: "TSLA",
     type: "sell",
     quantity: 15,
@@ -4597,7 +4620,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2025-09-15",
+    date: d("2025-09-15"),
     symbol: "LLOY",
     type: "sell",
     quantity: 10000,
@@ -4605,7 +4628,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-09-15",
+    date: d("2025-09-15"),
     symbol: "GOOGL",
     type: "buy",
     quantity: 20,
@@ -4614,7 +4637,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-09-20",
+    date: d("2025-09-20"),
     symbol: "VOD",
     type: "sell",
     quantity: 1000,
@@ -4622,7 +4645,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-10-01",
+    date: d("2025-10-01"),
     symbol: "TSLA",
     type: "buy",
     quantity: 15,
@@ -4631,7 +4654,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.24,
   },
   {
-    date: "2025-10-05",
+    date: d("2025-10-05"),
     symbol: "BP",
     type: "buy",
     quantity: 400,
@@ -4639,7 +4662,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2025-10-10",
+    date: d("2025-10-10"),
     symbol: "VOD",
     type: "sell",
     quantity: 2000,
@@ -4647,7 +4670,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-10-15",
+    date: d("2025-10-15"),
     symbol: "NVDA",
     type: "buy",
     quantity: 50,
@@ -4656,7 +4679,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.25,
   },
   {
-    date: "2025-10-15",
+    date: d("2025-10-15"),
     symbol: "AMZN",
     type: "sell",
     quantity: 15,
@@ -4665,7 +4688,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.27,
   },
   {
-    date: "2025-10-20",
+    date: d("2025-10-20"),
     symbol: "AAPL",
     type: "buy",
     quantity: 15,
@@ -4674,7 +4697,7 @@ const trades: CgtTradeInput[] = [
     exchangeRate: 1.3,
   },
   {
-    date: "2025-11-01",
+    date: d("2025-11-01"),
     symbol: "LLOY",
     type: "sell",
     quantity: 5000,
@@ -4682,7 +4705,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 0,
   },
   {
-    date: "2025-11-05",
+    date: d("2025-11-05"),
     symbol: "BP",
     type: "buy",
     quantity: 200,
@@ -4690,7 +4713,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2025-11-05",
+    date: d("2025-11-05"),
     symbol: "BP",
     type: "sell",
     quantity: 200,
@@ -4698,7 +4721,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 5,
   },
   {
-    date: "2025-11-15",
+    date: d("2025-11-15"),
     symbol: "SHEL",
     type: "buy",
     quantity: 100,
@@ -4706,7 +4729,7 @@ const trades: CgtTradeInput[] = [
     allowableExpenditure: 9.99,
   },
   {
-    date: "2025-11-20",
+    date: d("2025-11-20"),
     symbol: "NVDA",
     type: "sell",
     quantity: 40,
@@ -4752,28 +4775,33 @@ const SYMBOLS_WITH_REMAINING_POSITIONS = [
   "LLOY",
 ];
 
-function findDisposal(result: CgtResult, date: string, symbol: string) {
+function findDisposal(
+  result: CgCalculateResult,
+  date: string,
+  symbol: string
+): CgEvent | undefined {
+  const target = new Date(date).getTime();
   for (const ty of result.taxYears) {
-    const d = ty.disposals.find((disp) => disp.date === date && disp.symbol === symbol);
-    if (d) return d;
+    const found = yearDisposals(ty).find((e) => e.date.getTime() === target && e.symbol === symbol);
+    if (found) return found;
   }
   return undefined;
 }
 
-function findTaxYear(result: CgtResult, taxYear: string) {
+function findTaxYear(result: CgCalculateResult, taxYear: string) {
   return result.taxYears.find((ty) => ty.taxYear === taxYear);
 }
 
 describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
-  let result: CgtResult;
+  let result: CgCalculateResult;
+  let normalisedTrades: CgNormalisedTransaction[];
 
   // Run calculation once for all assertions
   it("calculates without errors", () => {
-    const r = calculateCgt(trades, { splitEvents });
-    expect(r.ok).toBe(true);
-    if (!r.ok) throw new Error(r.errors[0].message);
-    result = r.data;
+    result = calculateCgt(trades, { splitEvents });
+    normalisedTrades = result.normalisedTransactions;
     expect(result).toBeDefined();
+    expect(normalisedTrades.length).toBeGreaterThan(0);
   });
 
   // -----------------------------------------------------------------------
@@ -4788,40 +4816,36 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   });
 
   it("has pools for all 10 symbols", () => {
-    const poolSymbols = result.pools.map((p) => p.symbol).sort();
+    const poolSymbols = currentPools(result)
+      .map((p) => p.symbol)
+      .sort();
     for (const sym of SYMBOLS_WITH_REMAINING_POSITIONS) {
       expect(poolSymbols).toContain(sym);
     }
   });
 
   it("all pools have positive shares and cost", () => {
-    for (const pool of result.pools) {
+    for (const pool of currentPools(result)) {
       expect(pool.shares).toBeGreaterThan(0);
       expect(pool.costGBP).toBeGreaterThan(0);
     }
   });
 
-  it("produces pool snapshots for each active tax year", () => {
-    const snapshotYears = Object.keys(result.poolSnapshots).sort();
+  it("each tax year has a poolAtYearEnd snapshot", () => {
+    for (const ty of result.taxYears) {
+      expect(ty.poolAtYearEnd).toBeDefined();
+    }
+    const taxYearStrings = result.taxYears.map((ty) => ty.taxYear).sort();
     for (const ty of EXPECTED_ACTIVE_TAX_YEARS) {
-      expect(snapshotYears).toContain(ty);
+      expect(taxYearStrings).toContain(ty);
     }
   });
 
-  it("split events are passed through", () => {
-    expect(result.splitEvents).toHaveLength(5);
-    expect(result.splitEvents.map((s) => s.symbol).sort()).toEqual([
-      "AAPL",
-      "AMZN",
-      "GOOGL",
-      "NVDA",
-      "TSLA",
-    ]);
-  });
-
   it("normalised trades are sorted by date", () => {
-    for (let i = 1; i < result.normalisedTrades.length; i++) {
-      expect(result.normalisedTrades[i].date >= result.normalisedTrades[i - 1].date).toBe(true);
+    for (let i = 1; i < normalisedTrades.length; i++) {
+      expect(normalisedTrades[i].date.getTime() >= normalisedTrades[i - 1].date.getTime()).toBe(
+        true
+      );
     }
   });
 
@@ -4925,27 +4949,31 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   });
 
   it("applies B&B at exactly 30 days (SHEL 2018-07-01 / 2018-07-31)", () => {
-    const d = findDisposal(result, "2018-07-01", "SHEL");
-    expect(d).toBeDefined();
-    const bAndBMatch = d!.matches.find((m) => m.rule === "bed-and-breakfast");
+    const disp = findDisposal(result, "2018-07-01", "SHEL");
+    expect(disp).toBeDefined();
+    const bAndBMatch = disp!.matches.find((m) => m.rule === "bed-and-breakfast");
     expect(bAndBMatch).toBeDefined();
-    expect(bAndBMatch!.matchedDate).toBe("2018-07-31");
+    expect(bAndBMatch!.matchedDate).toEqual(d("2018-07-31"));
   });
 
   it("does NOT apply B&B at day 31 (VOD 2018-08-15 / 2018-09-15)", () => {
-    const d = findDisposal(result, "2018-08-15", "VOD");
-    expect(d).toBeDefined();
-    const bAndBMatch = d!.matches.find(
-      (m) => m.rule === "bed-and-breakfast" && m.matchedDate === "2018-09-15"
+    const disp = findDisposal(result, "2018-08-15", "VOD");
+    expect(disp).toBeDefined();
+    const bAndBMatch = disp!.matches.find(
+      (m) =>
+        m.rule === "bed-and-breakfast" &&
+        m.matchedDate?.getTime() === new Date("2018-09-15").getTime()
     );
     expect(bAndBMatch).toBeUndefined();
   });
 
   it("does NOT apply B&B at day 31 (VOD 2025-01-20 / 2025-02-20)", () => {
-    const d = findDisposal(result, "2025-01-20", "VOD");
-    expect(d).toBeDefined();
-    const bAndBMatch = d!.matches.find(
-      (m) => m.rule === "bed-and-breakfast" && m.matchedDate === "2025-02-20"
+    const disp = findDisposal(result, "2025-01-20", "VOD");
+    expect(disp).toBeDefined();
+    const bAndBMatch = disp!.matches.find(
+      (m) =>
+        m.rule === "bed-and-breakfast" &&
+        m.matchedDate?.getTime() === new Date("2025-02-20").getTime()
     );
     expect(bAndBMatch).toBeUndefined();
   });
@@ -4997,38 +5025,38 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   // -----------------------------------------------------------------------
 
   it("processes LLOY transfer as no-gain/no-loss (2018-11-01)", () => {
-    const d = findDisposal(result, "2018-11-01", "LLOY");
-    expect(d).toBeDefined();
-    expect(d!.type).toBe("transfer");
-    expect(d!.gainGBP).toBeCloseTo(0, 2);
+    const disp = findDisposal(result, "2018-11-01", "LLOY");
+    expect(disp).toBeDefined();
+    expect(disp!.type).toBe("transfer");
+    expect(disp!.gainGBP).toBeCloseTo(0, 2);
   });
 
   it("processes BP transfer to spouse (2019-12-01)", () => {
-    const d = findDisposal(result, "2019-12-01", "BP");
-    expect(d).toBeDefined();
-    expect(d!.type).toBe("transfer");
-    expect(d!.gainGBP).toBeCloseTo(0, 2);
+    const disp = findDisposal(result, "2019-12-01", "BP");
+    expect(disp).toBeDefined();
+    expect(disp!.type).toBe("transfer");
+    expect(disp!.gainGBP).toBeCloseTo(0, 2);
   });
 
   it("processes VOD transfer to spouse (2020-12-15)", () => {
-    const d = findDisposal(result, "2020-12-15", "VOD");
-    expect(d).toBeDefined();
-    expect(d!.type).toBe("transfer");
-    expect(d!.gainGBP).toBeCloseTo(0, 2);
+    const disp = findDisposal(result, "2020-12-15", "VOD");
+    expect(disp).toBeDefined();
+    expect(disp!.type).toBe("transfer");
+    expect(disp!.gainGBP).toBeCloseTo(0, 2);
   });
 
   it("processes SHEL transfer to spouse (2022-10-15)", () => {
-    const d = findDisposal(result, "2022-10-15", "SHEL");
-    expect(d).toBeDefined();
-    expect(d!.type).toBe("transfer");
-    expect(d!.gainGBP).toBeCloseTo(0, 2);
+    const disp = findDisposal(result, "2022-10-15", "SHEL");
+    expect(disp).toBeDefined();
+    expect(disp!.type).toBe("transfer");
+    expect(disp!.gainGBP).toBeCloseTo(0, 2);
   });
 
   it("processes GOOGL transfer to spouse (2023-10-15)", () => {
-    const d = findDisposal(result, "2023-10-15", "GOOGL");
-    expect(d).toBeDefined();
-    expect(d!.type).toBe("transfer");
-    expect(d!.gainGBP).toBeCloseTo(0, 2);
+    const disp = findDisposal(result, "2023-10-15", "GOOGL");
+    expect(disp).toBeDefined();
+    expect(disp!.type).toBe("transfer");
+    expect(disp!.gainGBP).toBeCloseTo(0, 2);
   });
 
   // -----------------------------------------------------------------------
@@ -5038,24 +5066,28 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   it("places April 5 buy in 2015/16 tax year", () => {
     const ty201516 = findTaxYear(result, "2015/16");
     expect(ty201516).toBeDefined();
-    const acq = ty201516!.acquisitions.find((a) => a.date === "2016-04-05" && a.symbol === "BP");
+    const acq = yearAcquisitions(ty201516!).find(
+      (e) => e.date.getTime() === d("2016-04-05").getTime() && e.symbol === "BP"
+    );
     expect(acq).toBeDefined();
   });
 
   it("places April 6 buy in 2016/17 tax year", () => {
     const ty201617 = findTaxYear(result, "2016/17");
     expect(ty201617).toBeDefined();
-    const acq = ty201617!.acquisitions.find((a) => a.date === "2016-04-06" && a.symbol === "BP");
+    const acq = yearAcquisitions(ty201617!).find(
+      (e) => e.date.getTime() === d("2016-04-06").getTime() && e.symbol === "BP"
+    );
     expect(acq).toBeDefined();
   });
 
   it("places April 5 sell in the ending tax year (VOD 2022-04-05 in 2021/22)", () => {
     const ty202122 = findTaxYear(result, "2021/22");
     expect(ty202122).toBeDefined();
-    const d = ty202122!.disposals.find(
-      (disp) => disp.date === "2022-04-05" && disp.symbol === "VOD"
+    const found = yearDisposals(ty202122!).find(
+      (disp) => disp.date.getTime() === d("2022-04-05").getTime() && disp.symbol === "VOD"
     );
-    expect(d).toBeDefined();
+    expect(found).toBeDefined();
   });
 
   // -----------------------------------------------------------------------
@@ -5066,28 +5098,32 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
     const ty202425 = findTaxYear(result, "2024/25");
     expect(ty202425).toBeDefined();
     expect(ty202425!.periods).toHaveLength(2);
-    expect(ty202425!.periods[0].rates).toEqual({ basic: 10, higher: 20 });
-    expect(ty202425!.periods[1].rates).toEqual({ basic: 18, higher: 24 });
+    expect(ty202425!.periods[0].period.basicRate).toBe(10);
+    expect(ty202425!.periods[0].period.higherRate).toBe(20);
+    expect(ty202425!.periods[1].period.basicRate).toBe(18);
+    expect(ty202425!.periods[1].period.higherRate).toBe(24);
   });
 
   it("LLOY sell on 2024-10-29 is in the old-rate period", () => {
     const ty202425 = findTaxYear(result, "2024/25");
     expect(ty202425).toBeDefined();
     const oldPeriod = ty202425!.periods[0];
-    const d = oldPeriod.disposals.find(
-      (disp) => disp.date === "2024-10-29" && disp.symbol === "LLOY"
+    const found = oldPeriod.events.find(
+      (e) =>
+        e.type === "sell" && e.date.getTime() === d("2024-10-29").getTime() && e.symbol === "LLOY"
     );
-    expect(d).toBeDefined();
+    expect(found).toBeDefined();
   });
 
   it("LLOY sell on 2024-10-30 is in the new-rate period", () => {
     const ty202425 = findTaxYear(result, "2024/25");
     expect(ty202425).toBeDefined();
     const newPeriod = ty202425!.periods[1];
-    const d = newPeriod.disposals.find(
-      (disp) => disp.date === "2024-10-30" && disp.symbol === "LLOY"
+    const found = newPeriod.events.find(
+      (e) =>
+        e.type === "sell" && e.date.getTime() === d("2024-10-30").getTime() && e.symbol === "LLOY"
     );
-    expect(d).toBeDefined();
+    expect(found).toBeDefined();
   });
 
   // -----------------------------------------------------------------------
@@ -5096,19 +5132,23 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
 
   it("AAPL post-split trades have adjustment factor of 1", () => {
     const postSplitDisposals = result.taxYears.flatMap((ty) =>
-      ty.disposals.filter((d) => d.symbol === "AAPL" && d.date > "2020-08-31")
+      yearDisposals(ty).filter(
+        (e) => e.symbol === "AAPL" && e.date.getTime() > new Date("2020-08-31").getTime()
+      )
     );
-    for (const d of postSplitDisposals) {
-      expect(d.adjustmentFactor).toBe(1);
+    for (const e of postSplitDisposals) {
+      expect(e.splitFactor).toBe(1);
     }
   });
 
   it("NVDA post-split trades have adjustment factor of 1", () => {
     const postSplitDisposals = result.taxYears.flatMap((ty) =>
-      ty.disposals.filter((d) => d.symbol === "NVDA" && d.date > "2024-06-10")
+      yearDisposals(ty).filter(
+        (e) => e.symbol === "NVDA" && e.date.getTime() > new Date("2024-06-10").getTime()
+      )
     );
-    for (const d of postSplitDisposals) {
-      expect(d.adjustmentFactor).toBe(1);
+    for (const e of postSplitDisposals) {
+      expect(e.splitFactor).toBe(1);
     }
   });
 
@@ -5117,9 +5157,9 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   // -----------------------------------------------------------------------
 
   it("handles full TSLA disposal on 2019-06-01", () => {
-    const d = findDisposal(result, "2019-06-01", "TSLA");
-    expect(d).toBeDefined();
-    expect(d!.type).toBe("disposal");
+    const disp = findDisposal(result, "2019-06-01", "TSLA");
+    expect(disp).toBeDefined();
+    expect(disp!.type).toBe("sell");
   });
 
   // -----------------------------------------------------------------------
@@ -5147,13 +5187,13 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   // -----------------------------------------------------------------------
 
   it("has a reasonable number of disposals across all years", () => {
-    const totalDisposals = result.taxYears.reduce((sum, ty) => sum + ty.disposals.length, 0);
+    const totalDisposals = result.taxYears.reduce((sum, ty) => sum + yearDisposals(ty).length, 0);
     expect(totalDisposals).toBeGreaterThan(100);
   });
 
   it("every disposal has at least one match", () => {
     for (const ty of result.taxYears) {
-      for (const d of ty.disposals) {
+      for (const d of yearDisposals(ty)) {
         expect(d.matches.length).toBeGreaterThan(0);
       }
     }
@@ -5162,7 +5202,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   it("every disposal match has a valid rule", () => {
     const validRules = new Set(["same-day", "bed-and-breakfast", "section-104"]);
     for (const ty of result.taxYears) {
-      for (const d of ty.disposals) {
+      for (const d of yearDisposals(ty)) {
         for (const m of d.matches) {
           expect(validRules.has(m.rule)).toBe(true);
         }
@@ -5172,9 +5212,8 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
 
   it("every disposal has pool state snapshots", () => {
     for (const ty of result.taxYears) {
-      for (const d of ty.disposals) {
-        expect(Array.isArray(d.poolStateBefore)).toBe(true);
-        expect(Array.isArray(d.poolStateAfter)).toBe(true);
+      for (const e of yearDisposals(ty)) {
+        expect(Array.isArray(e.poolAfter)).toBe(true);
       }
     }
   });
@@ -5188,7 +5227,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
     let bAndBCount = 0;
     let poolCount = 0;
     for (const ty of result.taxYears) {
-      for (const d of ty.disposals) {
+      for (const d of yearDisposals(ty)) {
         for (const m of d.matches) {
           if (m.rule === "same-day") sameDayCount++;
           if (m.rule === "bed-and-breakfast") bAndBCount++;
@@ -5202,7 +5241,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   });
 
   it("final pool state matches pinned values", () => {
-    const pool = (sym: string) => result.pools.find((p) => p.symbol === sym)!;
+    const pool = (sym: string) => currentPools(result).find((p) => p.symbol === sym)!;
     expect(pool("VOD").shares).toBeCloseTo(48100, 0);
     expect(pool("BP").shares).toBeCloseTo(31600, 0);
     expect(pool("SHEL").shares).toBeCloseTo(2730, 0);
@@ -5241,7 +5280,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
     };
     for (const ty of result.taxYears) {
       if (expectedAEAs[ty.taxYear] !== undefined) {
-        expect(ty.annualExemptAmount).toBe(expectedAEAs[ty.taxYear]);
+        expect(ty.limits.annualExemptAmount).toBe(expectedAEAs[ty.taxYear]);
       }
     }
   });
@@ -5256,20 +5295,20 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
 
     for (const ty of result.taxYears) {
       lines.push(`Tax Year: ${ty.taxYear}`);
-      lines.push(`  AEA: ${ty.annualExemptAmount}`);
-      lines.push(`  Disposals: ${ty.disposalCount}`);
-      lines.push(`  Total proceeds: ${ty.totalProceeds.toFixed(2)}`);
-      lines.push(`  Total costs: ${ty.totalCosts.toFixed(2)}`);
-      lines.push(`  Total gains: ${ty.totalGains.toFixed(2)}`);
-      lines.push(`  Total losses: ${ty.totalLosses.toFixed(2)}`);
-      lines.push(`  Net gain/loss: ${ty.netGainLoss.toFixed(2)}`);
-      lines.push(`  Taxable gain: ${ty.taxableGain.toFixed(2)}`);
-      lines.push(`  Tax (basic): ${ty.taxBasicRate.toFixed(2)}`);
-      lines.push(`  Tax (higher): ${ty.taxHigherRate.toFixed(2)}`);
+      lines.push(`  AEA: ${ty.limits.annualExemptAmount}`);
+      lines.push(`  Disposals: ${yearDisposals(ty).length}`);
+      lines.push(`  Total proceeds: ${ty.proceedsGBP.toFixed(2)}`);
+      lines.push(`  Total costs: ${ty.costsGBP.toFixed(2)}`);
+      lines.push(`  Total gains: ${ty.gainsGBP.toFixed(2)}`);
+      lines.push(`  Total losses: ${ty.lossesGBP.toFixed(2)}`);
+      lines.push(`  Net gain/loss: ${ty.netGainGBP.toFixed(2)}`);
+      lines.push(`  Taxable gain: ${ty.taxableGainGBP.toFixed(2)}`);
+      lines.push(`  Tax (basic): ${ty.taxBasicGBP.toFixed(2)}`);
+      lines.push(`  Tax (higher): ${ty.taxHigherGBP.toFixed(2)}`);
       if (ty.periods.length > 1) {
         for (const p of ty.periods) {
           lines.push(
-            `  Period ${p.from} to ${p.to}: rates ${p.rates.basic}%/${p.rates.higher}%, disposals: ${p.disposalCount}, taxable: ${p.taxableGain.toFixed(2)}`
+            `  Period ${p.period.from} to ${p.period.to}: rates ${p.period.basicRate}%/${p.period.higherRate}%, events: ${p.events.length}, allocatedAEA: ${p.allocatedAEA.toFixed(2)}`
           );
         }
       }
@@ -5277,7 +5316,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
     }
 
     lines.push("Final pool state:");
-    for (const pool of result.pools) {
+    for (const pool of currentPools(result)) {
       lines.push(
         `  ${pool.symbol}: ${pool.shares.toFixed(2)} shares, cost ${pool.costGBP.toFixed(2)} GBP, avg ${(pool.costGBP / pool.shares).toFixed(4)}/share`
       );
@@ -5288,7 +5327,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
     let bAndBCount = 0;
     let poolCount = 0;
     for (const ty of result.taxYears) {
-      for (const d of ty.disposals) {
+      for (const d of yearDisposals(ty)) {
         for (const m of d.matches) {
           if (m.rule === "same-day") sameDayCount++;
           if (m.rule === "bed-and-breakfast") bAndBCount++;

@@ -7,28 +7,21 @@ dist/
 # Coverage
 coverage/
 
-# Environment files
-.env
-.env.*
-
 # Package tarballs
 *.tgz
 
 # OS files
 .DS_Store
-Thumbs.db
 
 # IDE
 .idea/
 .vscode/
-*.swp
-*.swo
-
-# Turbo
-.turbo/
 
 # Generated fixture files
 generated/
 
 # AI agent instructions
 CLAUDE.md
+
+# Working scratchpad
+TASKS.md

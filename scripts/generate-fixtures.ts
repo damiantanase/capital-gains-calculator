@@ -1,7 +1,7 @@
 /**
  * Generates external-tool-compatible fixture files from the mega test suite.
  *
- * Produces two files in tests/fixtures/:
+ * Produces two files in generated/:
  *   - mega-suite-with-splits.txt    — All B/S trades + restructuring events (no transfers)
  *   - mega-suite-with-transfers.txt — All B/S/T trades + transfers (no restructuring events)
  *
@@ -23,14 +23,18 @@ const fixturesDir = join(projectRoot, "generated");
 mkdirSync(fixturesDir, { recursive: true });
 
 const content = readFileSync(testFile, "utf-8");
-const tradesMatch = content.match(/const trades: CgtTradeInput\[\] = \[([\s\S]*?)\n\];/);
+const tradesMatch = content.match(/const trades: CgTradeInput\[\] = \[([\s\S]*?)\n\];/);
 if (!tradesMatch) {
   console.error("Could not find trades array in mega-suite.test.ts");
   process.exit(1);
 }
 
 const tradesBlock = tradesMatch[1];
-const tradeLines = tradesBlock.split("\n").filter((l) => l.trim().startsWith("{"));
+
+// Each trade is a multi-line `{ ... }` object literal. Split on the closing
+// brace so the field regexes below can match across the object's lines. Dates
+// are written as `d("YYYY-MM-DD")` (a Date helper in the test file).
+const tradeBlocks = tradesBlock.split("}").filter((b) => b.includes("date:"));
 
 interface ParsedTrade {
   date: string;
@@ -42,10 +46,10 @@ interface ParsedTrade {
   exchangeRate: number;
 }
 
-const trades: ParsedTrade[] = tradeLines.map((line) => {
-  const m = (r: RegExp) => line.match(r)?.[1];
+const trades: ParsedTrade[] = tradeBlocks.map((block) => {
+  const m = (r: RegExp) => block.match(r)?.[1];
   return {
-    date: m(/date: "([^"]+)"/)!,
+    date: m(/date: d\("([^"]+)"\)/)!,
     symbol: m(/symbol: "([^"]+)"/)!,
     type: m(/type: "([^"]+)"/)!,
     quantity: parseFloat(m(/quantity: ([\d.]+)/) || "0"),
@@ -116,5 +120,9 @@ writeFileSync(splitsFilePath, splitsFileLines.join("\n") + "\n");
 writeFileSync(transfersFilePath, transfersFileLines.join("\n") + "\n");
 
 console.log(`Generated:`);
-console.log(`  ${splitsFilePath} (${splitsFileLines.length} lines: ${splits.length} restructurings + ${splitsFileLines.length - splits.length} trades)`);
-console.log(`  ${transfersFilePath} (${transfersFileLines.length} lines: ${trades.filter((t) => t.type === "transfer").length} transfers + ${transfersFileLines.length - trades.filter((t) => t.type === "transfer").length} trades)`);
+console.log(
+  `  ${splitsFilePath} (${splitsFileLines.length} lines: ${splits.length} restructurings + ${splitsFileLines.length - splits.length} trades)`
+);
+console.log(
+  `  ${transfersFilePath} (${transfersFileLines.length} lines: ${trades.filter((t) => t.type === "transfer").length} transfers + ${transfersFileLines.length - trades.filter((t) => t.type === "transfer").length} trades)`
+);

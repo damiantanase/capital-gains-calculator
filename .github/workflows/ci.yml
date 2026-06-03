@@ -9,38 +9,35 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    strategy:
-      matrix:
-        node-version: [20, 22, 24]
-
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .nvmrc
+          cache: npm
 
       - name: Install dependencies
-        run: rm -f package-lock.json && npm install
+        run: npm ci
 
       - name: Audit dependencies
         run: npm audit --audit-level=moderate
 
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Build (runs typecheck + lint + tests with 100% coverage enforcement)
+      - name: Build (runs typecheck + lint + format:check + tests with 100% coverage enforcement + doc-example typecheck)
         run: npm run build
 
       - name: Verify ESM exports
-        run: node --input-type=module -e "import { calculateCgt, normaliseTrades, calculateOptimalSell } from './dist/index.js'; if (typeof calculateCgt !== 'function') process.exit(1)"
-
-      - name: Verify CJS exports
-        run: node -e "const { calculateCgt, normaliseTrades, calculateOptimalSell } = require('./dist/index.cjs'); if (typeof calculateCgt !== 'function') process.exit(1)"
+        run: npm run verify:exports

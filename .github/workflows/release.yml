@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # GitHub Actions tag filters are globs (not regex): `[0-9]+` would match a
+      # literal '+', so use `[0-9]*` which matches one-or-more digits per segment.
+      - "v[0-9]*.[0-9]*.[0-9]*"
 
 permissions:
   contents: read
@@ -13,27 +15,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    permissions:
+      contents: write # create the GitHub Release
+      id-token: write # mint OIDC token for npm trusted publishing
+
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version-file: .nvmrc # trusted publishing needs npm >= 11.5.1 / Node >= 22.14.0
           registry-url: https://registry.npmjs.org
+          cache: npm
 
-      - name: Install dependencies
-        run: rm -f package-lock.json && npm install
-
-      - name: Build (runs typecheck + lint + tests with 100% coverage enforcement)
-        run: npm run build
-
-      - name: Verify package exports
-        run: |
-          node --input-type=module -e "import { calculateCgt, normaliseTrades, calculateOptimalSell } from './dist/index.js'; if (typeof calculateCgt !== 'function') process.exit(1)"
-          node -e "const { calculateCgt, normaliseTrades, calculateOptimalSell } = require('./dist/index.cjs'); if (typeof calculateCgt !== 'function') process.exit(1)"
-
+      # Fail fast before the heavy build if the tag and package.json disagree —
+      # this guard reads only the tag name and package.json, so run it first.
       - name: Verify tag matches package.json version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
@@ -43,7 +43,24 @@ jobs:
             exit 1
           fi
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Build (runs typecheck + lint + format:check + tests with 100% coverage enforcement + doc-example typecheck)
+        run: npm run build
+
+      - name: Verify package exports
+        run: npm run verify:exports
+
+      # Authenticates via OIDC trusted publishing (no token). Provenance is
+      # attached automatically for a public package from a public repo.
       - name: Publish to npm
         run: npm publish
+
+      - name: Create GitHub Release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag

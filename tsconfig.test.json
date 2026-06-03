@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    // Tests are type-checked but never emitted or published, so they keep
+    // extensionless imports (e.g. `from "../src/calculate"`). Override the
+    // base config's nodenext resolution back to bundler for this check only;
+    // src still gets the strict nodenext check via the base `tsc --noEmit`.
+    // (`module: "preserve"` can't collapse these two lines here: it only
+    // implies bundler resolution when moduleResolution is unset, but the base
+    // explicitly sets nodenext, which is inherited — so both are needed.)
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,22 +1,14 @@
 {
   "name": "capital-gains-calculator",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "UK Capital Gains Tax calculator implementing HMRC share matching rules (Section 104 pool, same-day rule, bed & breakfast rule)",
   "type": "module",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist"
@@ -36,7 +28,7 @@
   },
   "homepage": "https://github.com/damiantanase/capital-gains-calculator#readme",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "keywords": [
     "capital-gains",
@@ -48,33 +40,30 @@
     "bed-and-breakfast"
   ],
   "scripts": {
-    "build": "npm run validate && tsup",
-    "validate": "npm run typecheck && npm run lint && npm run test:coverage",
+    "build": "npm run validate && npm run clean && tsc",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test:coverage && npm run check:docs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'",
     "generate-fixtures": "npx tsx scripts/generate-fixtures.ts",
-    "prepare": "husky && tsup",
-    "prepublishOnly": "npm run build"
-  },
-  "lint-staged": {
-    "*.ts": "prettier --check"
+    "check:docs": "npx tsx scripts/check-doc-examples.ts",
+    "verify:exports": "node --input-type=module -e \"import { calculateCgt } from './dist/index.js'; if (typeof calculateCgt !== 'function') process.exit(1)\"",
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.1.6",
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.0.4",
     "prettier": "^3.8.3",
-    "tsup": "^8.0.0",
-    "typescript": "^5.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.3",
     "vitest": "^4.1.6"
   }
