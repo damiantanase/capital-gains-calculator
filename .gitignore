@@ -7,6 +7,10 @@ dist/
 # Coverage
 coverage/
 
+# Mutation testing (sandbox + HTML/JSON reports + incremental baseline)
+.stryker-tmp/
+reports/
+
 # Package tarballs
 *.tgz
 

@@ -291,6 +291,11 @@ describe("position validation", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].message).toContain("Cannot sell");
     expect(errors[0].message).toContain("TSLA");
+    // The available figure is reported in the user's ORIGINAL (pre-split) share terms:
+    // 5 shares held, de-adjusted by the trade's own 3x split factor (current / splitFactor).
+    // Asserting the number guards validate.ts:116 against `*` replacing `/` (which would
+    // report 45.0000 instead of 5.0000).
+    expect(errors[0].message).toContain("only 5.0000 shares available");
   });
 
   it("treats transfers as decreasing position (transfer out)", () => {

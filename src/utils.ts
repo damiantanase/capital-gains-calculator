@@ -104,8 +104,15 @@ export function deriveMatchCostGBP(
   if (match.rule === "section-104") {
     const pool = ctx.poolBefore.find((p) => p.symbol === ctx.symbol);
     if (!pool || pool.shares === 0) return 0;
+    // poolBefore is de-adjusted to real (as-of-disposal-date) shares, and
+    // originalMatchedQuantity is on that same as-of-date basis, so the pool's
+    // cost-per-share already reconciles directly. (Unlike the same-day/B&B
+    // branch below, whose counterparty cost-per-share is per split-adjusted
+    // share and therefore needs the ctx.splitFactor scaling.) Multiplying by
+    // ctx.splitFactor here would over-scale the cost by the factor of any split
+    // dated after the disposal.
     const costPerShare = pool.costGBP / pool.shares;
-    return costPerShare * match.originalMatchedQuantity * ctx.splitFactor;
+    return costPerShare * match.originalMatchedQuantity;
   }
   // Same-day/B&B matches always carry a counterparty normalisedTradeId.
   const tx = assertDefined(

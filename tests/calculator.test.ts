@@ -1871,6 +1871,237 @@ describe("CGT Calculator - Stock Splits", () => {
     expect(costPerShare).toBeCloseTo(5.65, 2);
     expect(event.matches[0].originalMatchedQuantity * event.splitFactor).toBe(130);
   });
+
+  it("does not inflate a pool disposal's cost/gain by a split that occurs AFTER the disposal", () => {
+    // Regression: a section-104 disposal dated before a later split previously had
+    // its match costGBP (and gainGBP) multiplied by the split factor, because the
+    // pool snapshot is de-adjusted to real shares while the derivation re-applied
+    // ctx.splitFactor. Buy 10 @ £100, sell 5 @ £150 (both pre-split), then a 2:1
+    // split a year later. The pool cost for the 5 disposed shares must be £500
+    // (5 × £100), gain £250 — unaffected by the later split.
+    const splitEvents: CgSplitEvent[] = [
+      { date: d("2020-01-01"), symbol: "X", ratioFrom: 1, ratioTo: 2 },
+    ];
+    const trades: CgTradeInput[] = [
+      makeTrade({ date: d("2018-01-01"), symbol: "X", type: "buy", quantity: 10, unitPrice: 100 }),
+      makeTrade({ date: d("2019-01-01"), symbol: "X", type: "sell", quantity: 5, unitPrice: 150 }),
+    ];
+    const result = runCgt(trades, { splitEvents });
+    const event = findSellEvent(result, "2019-01-01", "X")!;
+
+    expect(event.splitFactor).toBe(2);
+    expect(event.matches[0].rule).toBe("section-104");
+    expect(event.matches[0].costGBP).toBeCloseTo(500, 6);
+    expect(event.matches[0].gainGBP).toBeCloseTo(250, 6);
+    expect(event.costGBP).toBeCloseTo(500, 6);
+    expect(event.gainGBP).toBeCloseTo(250, 6);
+    // The match cost must reconcile with the pool's actual cost movement.
+    expect(event.matches[0].costGBP).toBeCloseTo(-event.poolImpact.costDeltaGBP, 6);
+  });
+});
+
+// These tests were added to kill mutation-testing survivors. The existing suite
+// reaches 100% line/branch coverage, but several split-factor multiplications and
+// boundary comparisons could be mutated without any test noticing — the same class
+// of defect as the shipped bug above. Each test forces a scenario where the mutated
+// operator produces a different number (or wrong matched quantity), so Stryker can
+// no longer survive the mutant. The key trick throughout: existing split tests use a
+// 2:1 split, where `x * splitFactor`, the de-adjustment `/ splitFactor`, and the
+// ratio `ratioTo / ratioFrom` all coincide with their mutants (2/1 === 2*1, and a
+// same-day/B&B disposal that is itself split-adjusted is rare in the suite). These
+// use same-day/B&B matches that ARE split-adjusted, and an asymmetric 3:2 ratio.
+describe("CGT Calculator - split-factor scaling on every match branch (mutation guards)", () => {
+  it("scales a same-day match's cost/gain correctly when a split occurs AFTER the disposal", () => {
+    // Mirror of the section-104 regression above, but on the SAME-DAY branch
+    // (deriveMatchCostGBP same-day/B&B path: txAdjQty = originalQuantity * splitFactor;
+    // cost = costPerShare * originalMatchedQuantity * ctx.splitFactor). Buy and sell 5
+    // on the same day @ £100/£150, then a 2:1 split a year later. Cost must be £500,
+    // gain £250 — the two split factors (counterparty's and the disposal's) cancel, so
+    // mutating either `*` to `/` (utils.ts:122, 124) changes the number.
+    const splitEvents: CgSplitEvent[] = [
+      { date: d("2020-01-01"), symbol: "Y", ratioFrom: 1, ratioTo: 2 },
+    ];
+    const trades: CgTradeInput[] = [
+      makeTrade({ date: d("2018-01-01"), symbol: "Y", type: "buy", quantity: 10, unitPrice: 100 }),
+      makeTrade({ date: d("2018-01-01"), symbol: "Y", type: "sell", quantity: 5, unitPrice: 150 }),
+    ];
+    const result = runCgt(trades, { splitEvents });
+    const sell = findSellEvent(result, "2018-01-01", "Y")!;
+
+    expect(sell.splitFactor).toBe(2);
+    expect(sell.matches[0].rule).toBe("same-day");
+    // originalMatchedQuantity is on the original (pre-split) basis: 5 shares.
+    expect(sell.matches[0].originalMatchedQuantity).toBe(5);
+    expect(sell.matches[0].costGBP).toBeCloseTo(500, 6);
+    expect(sell.matches[0].gainGBP).toBeCloseTo(250, 6);
+    expect(sell.costGBP).toBeCloseTo(500, 6);
+    expect(sell.gainGBP).toBeCloseTo(250, 6);
+
+    // The same-day buy records the same matched quantity on its own (equal here) split
+    // factor — guards recordMatch's `adjustedQuantity / buy.splitFactor` (match.ts:51,56).
+    const buyEvent = result.taxYears[0].periods[0].events.find(
+      (e) => e.type === "buy" && e.symbol === "Y"
+    )!;
+    const buySameDay = buyEvent.matches.find((m) => m.rule === "same-day")!;
+    expect(buySameDay.originalMatchedQuantity).toBe(5);
+  });
+
+  it("scales a B&B match's cost/gain correctly when a split occurs AFTER the disposal", () => {
+    // B&B branch of deriveMatchCostGBP. Sell 10, rebuy 10 @ £130 fourteen days later
+    // (inside the 30-day window), all before a later 2:1 split. The B&B cost is the
+    // rebuy cost £1300, gain 10*200 - 1300 = £700 — independent of the later split.
+    // Mutating the same-day/B&B `* splitFactor` (utils.ts:122 or :124) breaks this.
+    const splitEvents: CgSplitEvent[] = [
+      { date: d("2020-01-01"), symbol: "W", ratioFrom: 1, ratioTo: 2 },
+    ];
+    const trades: CgTradeInput[] = [
+      makeTrade({ date: d("2018-01-01"), symbol: "W", type: "buy", quantity: 100, unitPrice: 50 }),
+      makeTrade({ date: d("2018-06-01"), symbol: "W", type: "sell", quantity: 10, unitPrice: 200 }),
+      makeTrade({ date: d("2018-06-15"), symbol: "W", type: "buy", quantity: 10, unitPrice: 130 }),
+    ];
+    const result = runCgt(trades, { splitEvents });
+    const sell = findSellEvent(result, "2018-06-01", "W")!;
+    const bb = sell.matches.find((m) => m.rule === "bed-and-breakfast")!;
+
+    expect(sell.splitFactor).toBe(2);
+    expect(bb.originalMatchedQuantity).toBe(10);
+    expect(bb.costGBP).toBeCloseTo(1300, 6);
+    expect(bb.gainGBP).toBeCloseTo(700, 6);
+    expect(bb.matchedDate).toEqual(d("2018-06-15"));
+  });
+
+  it("de-adjusts a pool-entering buy's matched quantity by its own split factor", () => {
+    // match.ts:203 — a buy entering the Section 104 pool records
+    // originalMatchedQuantity = trade.remaining / trade.splitFactor. Buy 10 @ £100,
+    // then a 2:1 split a year later: the recorded quantity must stay 10 (original
+    // basis), not 40. Mutating `/` to `*` (match.ts:203) would report 40.
+    const splitEvents: CgSplitEvent[] = [
+      { date: d("2020-01-01"), symbol: "Z", ratioFrom: 1, ratioTo: 2 },
+    ];
+    const trades: CgTradeInput[] = [
+      makeTrade({ date: d("2018-01-01"), symbol: "Z", type: "buy", quantity: 10, unitPrice: 100 }),
+    ];
+    const result = runCgt(trades, { splitEvents });
+    const buyEvent = result.taxYears[0].periods[0].events.find((e) => e.type === "buy")!;
+    const poolMatch = buyEvent.matches.find((m) => m.rule === "section-104")!;
+
+    expect(buyEvent.splitFactor).toBe(2);
+    expect(poolMatch.originalMatchedQuantity).toBe(10);
+  });
+
+  it("uses an asymmetric split ratio so the pool de-adjustment ratio cannot be commuted", () => {
+    // capturePoolState (match.ts:167) accumulates futureSplitFactor *= ratioTo / ratioFrom
+    // and de-adjusts pool shares by it (match.ts:171). A 3-for-2 split (ratioFrom 2,
+    // ratioTo 3) gives splitFactor 1.5 — unlike a 2:1 split, 3/2 !== 3*2, so mutating
+    // `/` to `*` in the ratio changes the cost-per-share the disposal sees.
+    // Buy 10 @ £120 (pool £1200), sell 4 before the split: cost 4*120 = £480,
+    // gain 4*200 - 480 = £320.
+    const splitEvents: CgSplitEvent[] = [
+      { date: d("2020-01-01"), symbol: "T", ratioFrom: 2, ratioTo: 3 },
+    ];
+    const trades: CgTradeInput[] = [
+      makeTrade({ date: d("2018-01-01"), symbol: "T", type: "buy", quantity: 10, unitPrice: 120 }),
+      makeTrade({ date: d("2019-01-01"), symbol: "T", type: "sell", quantity: 4, unitPrice: 200 }),
+    ];
+    const result = runCgt(trades, { splitEvents });
+    const sell = findSellEvent(result, "2019-01-01", "T")!;
+
+    expect(sell.splitFactor).toBe(1.5);
+    // poolBefore is de-adjusted to as-of-disposal-date shares: still 10 (split is later).
+    expect(sell.poolBefore.find((p) => p.symbol === "T")!.shares).toBeCloseTo(10, 6);
+    expect(sell.matches[0].costGBP).toBeCloseTo(480, 6);
+    expect(sell.gainGBP).toBeCloseTo(320, 6);
+    // Invariant: the match cost equals the negated pool cost movement.
+    expect(sell.matches[0].costGBP).toBeCloseTo(-sell.poolImpact!.costDeltaGBP, 6);
+  });
+
+  it("treats a disposal dated ON a split date as post-split (split not applied to its pool view)", () => {
+    // capturePoolState (match.ts:166) includes only splits STRICTLY AFTER the as-of
+    // date (se.date > asOfDate). A disposal ON the split date must see the post-split
+    // pool: buy 10 @ £100 in 2019 (pool 10 sh / £1000), 2:1 split on 2020-06-01, sell 8
+    // ON 2020-06-01 sees 20 shares @ £50 → cost 8*50 = £400, gain 8*60 - 400 = £80.
+    // Mutating `>` to `>=` (match.ts:166) would de-adjust the pool to 10 shares and
+    // change the cost.
+    const splitEvents: CgSplitEvent[] = [
+      { date: d("2020-06-01"), symbol: "S", ratioFrom: 1, ratioTo: 2 },
+    ];
+    const trades: CgTradeInput[] = [
+      makeTrade({ date: d("2019-01-01"), symbol: "S", type: "buy", quantity: 10, unitPrice: 100 }),
+      makeTrade({ date: d("2020-06-01"), symbol: "S", type: "sell", quantity: 8, unitPrice: 60 }),
+    ];
+    const result = runCgt(trades, { splitEvents });
+    const sell = findSellEvent(result, "2020-06-01", "S")!;
+
+    expect(sell.splitFactor).toBe(1);
+    expect(sell.poolBefore.find((p) => p.symbol === "S")!.shares).toBeCloseTo(20, 6);
+    expect(sell.matches[0].costGBP).toBeCloseTo(400, 6);
+    expect(sell.gainGBP).toBeCloseTo(80, 6);
+  });
+
+  it("does not de-adjust one symbol's pool by another symbol's split", () => {
+    // capturePoolState (match.ts:166) only applies a split event to the pool of the
+    // SAME symbol (se.symbol === symbol). Here symbol A has a 2:1 split; symbol B has
+    // none. B's disposal must see B's untouched pool (10 shares @ £100 → cost £500,
+    // gain £250) regardless of A's later split. Dropping the symbol guard (mutating
+    // `se.symbol === symbol` to `true`) would de-adjust B's pool by A's 2x, halving
+    // its shares and doubling cost-per-share (cost £1000, gain −£250).
+    const splitEvents: CgSplitEvent[] = [
+      { date: d("2020-01-01"), symbol: "A", ratioFrom: 1, ratioTo: 2 },
+    ];
+    const trades: CgTradeInput[] = [
+      makeTrade({ date: d("2018-01-01"), symbol: "A", type: "buy", quantity: 10, unitPrice: 50 }),
+      makeTrade({ date: d("2018-01-01"), symbol: "B", type: "buy", quantity: 10, unitPrice: 100 }),
+      makeTrade({ date: d("2019-01-01"), symbol: "B", type: "sell", quantity: 5, unitPrice: 150 }),
+    ];
+    const result = runCgt(trades, { splitEvents });
+    const sellB = findSellEvent(result, "2019-01-01", "B")!;
+
+    expect(sellB.splitFactor).toBe(1);
+    expect(sellB.poolBefore.find((p) => p.symbol === "B")!.shares).toBeCloseTo(10, 6);
+    expect(sellB.matches[0].costGBP).toBeCloseTo(500, 6);
+    expect(sellB.gainGBP).toBeCloseTo(250, 6);
+    expect(sellB.matches[0].costGBP).toBeCloseTo(-sellB.poolImpact!.costDeltaGBP, 6);
+  });
+});
+
+describe("CGT Calculator - year aggregate field filters (mutation guards)", () => {
+  it("year costsGBP counts disposals only, never the cost shown on buy or transfer events", () => {
+    // sumCosts (utils.ts) filters to sells before summing costGBP. A transfer also
+    // carries a costGBP (its no-gain/no-loss base cost), and buys carry 0; if the
+    // filter were dropped (mutated to include all events) the year cost would absorb
+    // the transfer's £1000. Buy 100 @ £50, sell 10 @ £150 (cost £500), transfer 20
+    // next year. The 2022/23 year cost must be exactly £500.
+    const trades: CgTradeInput[] = [
+      makeTrade({
+        date: d("2022-05-01"),
+        symbol: "AAPL",
+        type: "buy",
+        quantity: 100,
+        unitPrice: 50,
+      }),
+      makeTrade({
+        date: d("2022-09-01"),
+        symbol: "AAPL",
+        type: "sell",
+        quantity: 10,
+        unitPrice: 150,
+      }),
+      makeTrade({
+        date: d("2023-01-01"),
+        symbol: "AAPL",
+        type: "transfer",
+        quantity: 20,
+        unitPrice: 0,
+      }),
+    ];
+    const result = runCgt(trades);
+    const year = findTaxYear(result, "2022/23")!;
+    const transfer = findSellEvent(result, "2023-01-01", "AAPL")!;
+
+    // The transfer itself carries a non-zero base cost (so the filter is doing work).
+    expect(transfer.costGBP).toBeCloseTo(1000, 6);
+    expect(year.costsGBP).toBeCloseTo(500, 6);
+  });
 });
 
 describe("CGT Calculator - Tax Year Summaries", () => {
@@ -3919,6 +4150,79 @@ describe("CGT Calculator - Reporting, counts, and remaining AEA fields", () => {
     expect(year.taxableGainGBP).toBe(0);
     expect(year.reportingRequired).toBe(true);
     expect(year.reportingReasons).toEqual(["proceeds-exceed-threshold"]);
+  });
+
+  it("does NOT flag reporting when proceeds exactly equal the threshold (must strictly exceed)", () => {
+    // Boundary for match.ts:374 (proceedsGBP > reportingThreshold). HMRC requires
+    // reporting only when proceeds EXCEED the threshold; proceeds exactly at it do not.
+    // 2023/24 threshold £50,000: proceeds exactly £50,000, gain £1,000 (< £6,000 AEA).
+    // Mutating `>` to `>=` would wrongly flag reporting here.
+    const trades: CgTradeInput[] = [
+      makeTrade({
+        date: d("2023-05-01"),
+        symbol: "RP",
+        type: "buy",
+        quantity: 1000,
+        unitPrice: 49,
+      }),
+      makeTrade({
+        date: d("2023-09-01"),
+        symbol: "RP",
+        type: "sell",
+        quantity: 1000,
+        unitPrice: 50,
+      }),
+    ];
+    const year = runCgt(trades).taxYears[0];
+    expect(year.proceedsGBP).toBeCloseTo(50000, 2);
+    expect(year.limits.reportingThreshold).toBe(50000);
+    expect(year.taxableGainGBP).toBe(0);
+    expect(year.reportingRequired).toBe(false);
+    expect(year.reportingReasons).toEqual([]);
+  });
+
+  it("assigns disposals dated exactly on a rate-period boundary to the correct period", () => {
+    // match.ts:313 assigns events to a rate period with inclusive bounds
+    // (date >= from && date <= to). The 2024/25 year splits on 30 Oct 2024: period 0
+    // ends 2024-10-29 (10/20%), period 1 starts 2024-10-30 (18/24%). A disposal ON each
+    // boundary date must land in the right period — mutating `>=` to `>` (or `<=` to `<`)
+    // would drop a boundary-dated disposal out of its period, losing its gain there.
+    const trades: CgTradeInput[] = [
+      makeTrade({
+        date: d("2024-05-01"),
+        symbol: "RB",
+        type: "buy",
+        quantity: 1000,
+        unitPrice: 10,
+      }),
+      makeTrade({
+        date: d("2024-10-29"),
+        symbol: "RB",
+        type: "sell",
+        quantity: 100,
+        unitPrice: 1000,
+      }),
+      makeTrade({
+        date: d("2024-10-30"),
+        symbol: "RB",
+        type: "sell",
+        quantity: 100,
+        unitPrice: 1000,
+      }),
+    ];
+    const year = findTaxYear(runCgt(trades), "2024/25")!;
+    const [pre, post] = year.periods;
+
+    // Each boundary-dated disposal lands in exactly one period (gain 100*1000 - 100*10 = 99,000).
+    expect(pre.period.to).toEqual(d("2024-10-29"));
+    expect(pre.disposalCount).toBe(1);
+    expect(pre.netGainGBP).toBeCloseTo(99000, 2);
+    expect(post.period.from).toEqual(d("2024-10-30"));
+    expect(post.disposalCount).toBe(1);
+    expect(post.netGainGBP).toBeCloseTo(99000, 2);
+    // The two gains are taxed at different headline rates, so the split must be exact.
+    expect(pre.period.higherRate).toBe(20);
+    expect(post.period.higherRate).toBe(24);
   });
 
   it("reports both reasons when gain exceeds the AEA and proceeds exceed the threshold", () => {
