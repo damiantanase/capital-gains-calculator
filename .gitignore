@@ -24,7 +24,8 @@ reports/
 # Generated fixture files
 generated/
 
-# AI agent instructions
+# AI agent instructions (kept outside this repo)
+AGENTS.md
 CLAUDE.md
 
 # Working scratchpad
