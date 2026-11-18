@@ -1,1 +1,47 @@
-{}
+{
+  "1242767": {
+    "active": true,
+    "notes": "@vitest/mocker >=2.1.0-beta.7 <4.1.12 (GHSA-qxg6-89mg-rqv8, moderate): Vitest: Code injection via unauthenticated manual mock registration. Dev dependency only (the package has no runtime dependencies; nothing published includes it). A fixed release exists within range or as a newer version. Fix: npm update / the dependency update, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1242769": {
+    "active": true,
+    "notes": "@vitest/mocker >=4.1.11 <4.1.12 (GHSA-xp26-3454-mjgp, moderate): Vitest: Windows backslash traversal bypasses the @vitest/mocker redirect allowlist fix. Dev dependency only (the package has no runtime dependencies; nothing published includes it). A fixed release exists within range or as a newer version. Fix: npm update / the dependency update, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1243098": {
+    "active": true,
+    "notes": "fast-uri >=3.0.0 <3.1.9 (GHSA-w74x-v6f9-j3xg, moderate): fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding. Dev dependency only (the package has no runtime dependencies; nothing published includes it). A fixed release exists within range or as a newer version. Fix: npm update / the dependency update, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1243101": {
+    "active": true,
+    "notes": "fast-uri >=3.0.0 <3.1.9 (GHSA-xhq7-xmqj-769h, low): fast-uri vulnerable to improper path equivalence in relative reference normalization. Dev dependency only (the package has no runtime dependencies; nothing published includes it). A fixed release exists within range or as a newer version. Fix: npm update / the dependency update, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1243104": {
+    "active": true,
+    "notes": "fast-uri >=3.1.3 <3.1.9 (GHSA-wjr9-j795-jxcr, moderate): fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization. Dev dependency only (the package has no runtime dependencies; nothing published includes it). A fixed release exists within range or as a newer version. Fix: npm update / the dependency update, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1243107": {
+    "active": true,
+    "notes": "fast-uri >=3.0.0 <3.1.9 (GHSA-333x-w4r6-6crp, low): fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references. Dev dependency only (the package has no runtime dependencies; nothing published includes it). A fixed release exists within range or as a newer version. Fix: npm update / the dependency update, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1243687": {
+    "active": true,
+    "notes": "qs >=6.7.0 <=6.16.0 (GHSA-6pq8-jhm2-2vcw, moderate): qs : qs.stringify with arrayFormat 'comma' throws an uncaught TypeError on array elements carrying a non-callable own toString (DoS). Dev dependency only (the package has no runtime dependencies; nothing published includes it). A fixed release exists within range or as a newer version. Fix: npm update / the dependency update, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1244623": {
+    "active": true,
+    "notes": "minimatch >=7.0.0 <11.0.1 (GHSA-g3hv-75wg-m249, moderate): minimatch has potential denial of service via globparts amplification. Dev dependency only (the package has no runtime dependencies; nothing published includes it). Fix is minimatch 11.0.1+, a major. Fix: update, or an overrides entry, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  },
+  "1247710": {
+    "active": true,
+    "notes": "picomatch <=4.0.7 (GHSA-fc5q-39xc-vjpf, high): picomatch vulnerable to ReDoS through single-branch repeated extglobs. Dev dependency only (the package has no runtime dependencies; nothing published includes it). No fixed release exists (4.0.7, the latest, is affected). Fix: update when picomatch ships a fix, then delete this entry. Accepted by the owner on 2026-11-18 to unblock the 2027/28 tax-year work.",
+    "expiry": "2027-02-16"
+  }
+}

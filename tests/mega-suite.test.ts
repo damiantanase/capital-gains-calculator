@@ -49,7 +49,7 @@ function yearAcquisitions(ty: CgCalculateResult["taxYears"][number]): CgEvent[] 
 //   14. Gains (many)
 //   15. Losses (COVID crash, bad timing)
 //   16. Transfers — gift to spouse (5 instances: LLOY, BP, VOD, SHEL, GOOGL)
-//   17. Multiple tax years (2008/09 through 2025/26 — 18 years)
+//   17. Multiple tax years (2008/09 through 2025/26, and 2027/28 — 19 years)
 //   18. Trades near tax year boundary (April 5 and April 6)
 //   19. Trades near B&B boundary (day 28, 29, 30, 31)
 //   20. Large quantities (10,000+ shares)
@@ -59,6 +59,7 @@ function yearAcquisitions(ty: CgCalculateResult["taxYears"][number]): CgEvent[] 
 //   24. Multiple sells on same day different symbols
 //   25. Accumulation over years (DCA-style buying)
 //   26. 2024/25 split rate period (pre/post 30 Oct 2024)
+//   27. 2027/28 disposal from the pool (MSFT 2027-06-15, 18%/24%)
 //
 
 const splitEvents: CgSplitEvent[] = [
@@ -4737,6 +4738,16 @@ const trades: CgTradeInput[] = [
     allowableExpenditure: 5,
     exchangeRate: 1.26,
   },
+  // --- 2027/28 tax year ---
+  {
+    date: d("2027-06-15"),
+    symbol: "MSFT",
+    type: "sell",
+    quantity: 40,
+    unitPrice: 480,
+    allowableExpenditure: 5,
+    exchangeRate: 1.34,
+  },
 ];
 
 // Tax years that should have disposals in the result
@@ -4759,6 +4770,7 @@ const EXPECTED_ACTIVE_TAX_YEARS = [
   "2023/24",
   "2024/25",
   "2025/26",
+  "2027/28",
 ];
 
 // Symbols that should have remaining pool positions
@@ -5127,6 +5139,41 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
   });
 
   // -----------------------------------------------------------------------
+  // 2027/28 assertions
+  // -----------------------------------------------------------------------
+
+  it("charges the MSFT sale on 2027-06-15 in 2027/28 at 18%/24% from the pool", () => {
+    const ty202728 = findTaxYear(result, "2027/28");
+    expect(ty202728).toBeDefined();
+    expect(ty202728!.periods).toHaveLength(1);
+    expect(ty202728!.periods[0].period.basicRate).toBe(18);
+    expect(ty202728!.periods[0].period.higherRate).toBe(24);
+    expect(ty202728!.limits.annualExemptAmount).toBe(3000);
+    expect(ty202728!.limits.reportingThreshold).toBe(50000);
+
+    const disposals = yearDisposals(ty202728!);
+    expect(disposals).toHaveLength(1);
+    const sale = disposals[0];
+    expect(sale.symbol).toBe("MSFT");
+    expect(sale.matches).toHaveLength(1);
+    expect(sale.matches[0].rule).toBe("section-104");
+
+    // Proceeds net of the $5 fee at $1.34/£1; cost is 40/170 of the pool's cost.
+    const msftBefore = sale.poolBefore.find((p) => p.symbol === "MSFT")!;
+    expect(msftBefore.shares).toBeCloseTo(170, 4);
+    const proceedsGBP = (40 * 480 - 5) / 1.34;
+    const costGBP = (msftBefore.costGBP * 40) / 170;
+    expect(sale.valueGBP).toBeCloseTo(proceedsGBP, 6);
+    expect(sale.gainGBP).toBeCloseTo(proceedsGBP - costGBP, 6);
+
+    const taxable = proceedsGBP - costGBP - 3000;
+    expect(taxable).toBeGreaterThan(1000);
+    expect(ty202728!.taxableGainGBP).toBeCloseTo(taxable, 6);
+    expect(ty202728!.taxBasicGBP).toBeCloseTo(taxable * 0.18, 6);
+    expect(ty202728!.taxHigherGBP).toBeCloseTo(taxable * 0.24, 6);
+  });
+
+  // -----------------------------------------------------------------------
   // Stock split assertions
   // -----------------------------------------------------------------------
 
@@ -5237,7 +5284,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
     }
     expect(sameDayCount).toBe(15);
     expect(bAndBCount).toBe(34);
-    expect(poolCount).toBe(172);
+    expect(poolCount).toBe(173);
   });
 
   it("final pool state matches pinned values", () => {
@@ -5248,7 +5295,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
     expect(pool("LLOY").shares).toBeCloseTo(89000, 0);
     expect(pool("NVDA").shares).toBeCloseTo(3140, 0);
     expect(pool("AMZN").shares).toBeCloseTo(1340, 0);
-    expect(pool("MSFT").shares).toBeCloseTo(170, 0);
+    expect(pool("MSFT").shares).toBeCloseTo(130, 0);
     expect(pool("AAPL").shares).toBeCloseTo(772, 0);
     expect(pool("TSLA").shares).toBeCloseTo(282, 0);
     expect(pool("GOOGL").shares).toBeCloseTo(1660, 0);
@@ -5277,6 +5324,7 @@ describe("Mega Suite - ~500 trade comprehensive CGT test", () => {
       "2023/24": 6000,
       "2024/25": 3000,
       "2025/26": 3000,
+      "2027/28": 3000,
     };
     for (const ty of result.taxYears) {
       if (expectedAEAs[ty.taxYear] !== undefined) {

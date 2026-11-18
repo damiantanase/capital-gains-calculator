@@ -14,7 +14,7 @@ UK Capital Gains Tax calculator implementing HMRC share matching rules.
 - Stock split adjustments (auto-computed from split events)
 - Trade validation and normalisation
 - Grouped by UK tax year (April 6 – April 5)
-- HMRC allowances and rates bundled (2008/09 – 2026/27)
+- HMRC allowances and rates bundled (2008/09 – 2027/28)
 - Zero runtime dependencies
 - TypeScript-first with full type exports
 - 100% test coverage enforced at build time
@@ -88,8 +88,8 @@ Returns the current UK tax year string based on today's date. Note: this is the 
 
 Returns the HMRC data the library supports, without running a calculation — useful for validating input up front (e.g. bounding a date-picker), looking up the CGT rate for a date, or reading a year's Annual Exempt Amount. Returns a `CgSupportInfo`:
 
-- `minDate` / `maxDate` — the earliest and latest trade dates `calculateCgt` accepts (currently `2008-04-06` to `2027-04-05`). Trades outside this range throw `CgValidationError`.
-- `earliestTaxYear` / `latestTaxYear` — the supported tax-year range as `"YYYY/YY"` strings (currently `"2008/09"` to `"2026/27"`).
+- `minDate` / `maxDate` — the earliest and latest trade dates `calculateCgt` accepts (currently `2008-04-06` to `2028-04-05`). Trades outside this range throw `CgValidationError`.
+- `earliestTaxYear` / `latestTaxYear` — the supported tax-year range as `"YYYY/YY"` strings (currently `"2008/09"` to `"2027/28"`).
 - `taxYears` — every supported year's `CgTaxYearConfig` (`limits` + `ratePeriods`), ascending by year.
 
 The returned object is a fresh deep copy; mutating it never affects the library.
@@ -144,7 +144,7 @@ Public types use the `Cg` prefix. Invalid input throws `CgValidationError` rathe
 
 ```typescript
 interface CgTradeInput {
-  date: Date;                     // UTC; from 2008-04-06 to the last day of the latest supported tax year (currently 2027-04-05)
+  date: Date;                     // UTC; from 2008-04-06 to the last day of the latest supported tax year (currently 2028-04-05)
   type: "buy" | "sell" | "transfer";
   symbol: string;                 // Stock ticker (case-sensitive)
   quantity: number;               // Number of shares (positive)
@@ -179,7 +179,7 @@ Each `CgTaxYearSummary` carries `{ taxYear, limits, periods, poolAtYearEnd }` pl
 ## Limitations
 
 - **Stocks and shares only** — this calculator handles listed securities (shares, ETFs, funds). It does not cover residential property, carried interest, or other asset classes which have different CGT rates and rules.
-- **Tax years 2008/09 to 2026/27** — the current CGT regime (flat/two-tier rates with Section 104 pooling) was introduced on 6 April 2008. Trades before this date are not supported (the previous system used taper relief and indexation allowance, which this library does not implement). Trades dated in a tax year after the latest bundled year (currently 2026/27) are also rejected until the HMRC config is extended.
+- **Tax years 2008/09 to 2027/28** — the current CGT regime (flat/two-tier rates with Section 104 pooling) was introduced on 6 April 2008. Trades before this date are not supported (the previous system used taper relief and indexation allowance, which this library does not implement). Trades dated in a tax year after the latest bundled year (currently 2027/28) are also rejected until the HMRC config is extended.
 - **Does not calculate tax owed** — the library computes gains, losses, and taxable amounts, but does not determine the actual tax liability. That depends on the taxpayer's income tax band, which is outside the scope of this calculator.
 - **No Business Asset Disposal Relief (BADR)** — formerly Entrepreneurs' Relief. This applies to qualifying business disposals at a 10% rate and is not modelled.
 - **No loss carry-forward** — losses from prior tax years that could offset current gains are not automatically tracked across separate calculations.

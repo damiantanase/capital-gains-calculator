@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-11-18
+
+### Added
+
+- Tax year 2027/28 (6 April 2027 to 5 April 2028): rates 18% and 24%, Annual Exempt Amount
+  £3,000, reporting threshold £50,000. `calculateCgt` accepts trades up to 5 April 2028.
+
 ## [2.0.0] - 2026-06-03
 
 First release since 1.2.0. (Versions 2.x–5.x were developed but never published; this entry covers the

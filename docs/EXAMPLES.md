@@ -361,7 +361,7 @@ try {
 }
 ```
 
-Validation covers: valid `Date` objects, no trades before 2008/09 or past the latest supported tax year (currently 2026/27), positive quantities, non-negative prices/fees, positive exchange rates, and position checks (you cannot sell or transfer more than the accumulated holding to that date).
+Validation covers: valid `Date` objects, no trades before 2008/09 or past the latest supported tax year (currently 2027/28), positive quantities, non-negative prices/fees, positive exchange rates, and position checks (you cannot sell or transfer more than the accumulated holding to that date).
 
 ### Inspecting normalised transactions
 
@@ -520,8 +520,8 @@ const info = getSupportInfo();
 
 // 1. Supported trade-date range (calculateCgt throws for dates outside it).
 console.log(info.minDate.toISOString().slice(0, 10)); // 2008-04-06
-console.log(info.maxDate.toISOString().slice(0, 10)); // 2027-04-05
-console.log(`${info.earliestTaxYear} to ${info.latestTaxYear}`); // 2008/09 to 2026/27
+console.log(info.maxDate.toISOString().slice(0, 10)); // 2028-04-05
+console.log(`${info.earliestTaxYear} to ${info.latestTaxYear}`); // 2008/09 to 2027/28
 
 // Guard input before calculating:
 function isSupported(tradeDate: Date): boolean {

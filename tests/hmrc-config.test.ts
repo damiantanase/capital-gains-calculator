@@ -43,6 +43,15 @@ describe("getTaxYearConfig", () => {
     expect(config!.ratePeriods[0]).toMatchObject({ basicRate: 18, higherRate: 24 });
   });
 
+  it("returns one 18/24 rate period and the 2027/28 limits", () => {
+    const config = getTaxYearConfig("2027/28");
+    expect(config!.limits).toEqual({ annualExemptAmount: 3000, reportingThreshold: 50000 });
+    expect(config!.ratePeriods).toHaveLength(1);
+    expect(config!.ratePeriods[0].from).toEqual(d("2027-04-06"));
+    expect(config!.ratePeriods[0].to).toEqual(d("2028-04-05"));
+    expect(config!.ratePeriods[0]).toMatchObject({ basicRate: 18, higherRate: 24 });
+  });
+
   it("has two rate periods for 2024/25 split on 30 October 2024", () => {
     const config = getTaxYearConfig("2024/25");
     expect(config!.ratePeriods).toHaveLength(2);
@@ -65,9 +74,9 @@ describe("getSupportInfo", () => {
   it("reports the supported date range derived from the config bounds", () => {
     const info = getSupportInfo();
     expect(info.minDate).toEqual(d("2008-04-06"));
-    expect(info.maxDate).toEqual(d("2027-04-05"));
+    expect(info.maxDate).toEqual(d("2028-04-05"));
     expect(info.earliestTaxYear).toBe("2008/09");
-    expect(info.latestTaxYear).toBe("2026/27");
+    expect(info.latestTaxYear).toBe("2027/28");
   });
 
   it("matches the internal min/max date and earliest/latest-year helpers", () => {
@@ -81,7 +90,7 @@ describe("getSupportInfo", () => {
   it("returns every supported year, ascending and contiguous", () => {
     const years = getSupportInfo().taxYears;
     expect(years[0].taxYear).toBe("2008/09");
-    expect(years[years.length - 1].taxYear).toBe("2026/27");
+    expect(years[years.length - 1].taxYear).toBe("2027/28");
     for (let i = 1; i < years.length; i++) {
       // Each year's first rate period starts the day after the previous year ends.
       const prevEnd = years[i - 1].ratePeriods[years[i - 1].ratePeriods.length - 1].to.getTime();

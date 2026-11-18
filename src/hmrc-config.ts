@@ -136,6 +136,13 @@ const taxYearConfig: readonly InternalTaxYearConfig[] = [
     limits: { annualExemptAmount: 3000, reportingThreshold: 50000 },
     ratePeriods: [{ from: "2026-04-06", to: "2027-04-05", basicRate: 18, higherRate: 24 }],
   },
+  // 2027/28: unchanged. Rates TCGA 1992 s1H(3), AEA s1K(2), threshold TMA 1970 s8C(1)(b);
+  // confirmed for 2027/28 by Budget 2026, Annex A (28 October 2026).
+  {
+    taxYear: "2027/28",
+    limits: { annualExemptAmount: 3000, reportingThreshold: 50000 },
+    ratePeriods: [{ from: "2027-04-06", to: "2028-04-05", basicRate: 18, higherRate: 24 }],
+  },
 ];
 
 /**
