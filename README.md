@@ -25,7 +25,7 @@ UK Capital Gains Tax calculator implementing HMRC share matching rules.
 npm install capital-gains-calculator
 ```
 
-Requires Node.js >= 24. This package is **ESM-only** — use `import` (CommonJS `require` is not
+Requires Node.js >= 26. This package is **ESM-only** — use `import` (CommonJS `require` is not
 supported; from CJS, use a dynamic `import()`).
 
 ## Quick Start

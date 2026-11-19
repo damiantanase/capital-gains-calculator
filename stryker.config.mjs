@@ -11,7 +11,7 @@
 
 /** @type {import('@stryker-mutator/core').PartialStrykerOptions} */
 const config = {
-  // Vitest 4.x runner. Peer is `vitest >= 2.0.0`; tests import straight from ../src
+  // Vitest 5.x runner. Peer is `vitest >= 2.0.0`; tests import straight from ../src
   // so there is no build step to keep in sync.
   testRunner: "vitest",
 
@@ -44,7 +44,7 @@ const config = {
   incrementalFile: "reports/stryker-incremental.json",
 
   // high/low colour the report. `break` is the hard-fail gate (exit 1 below it).
-  // Achieved score is 91.86%; break is set just below at 88 to ratchet quality
+  // Achieved score is 91.91% (Stryker 10, 890 mutants); break is set just below at 88 to ratchet quality
   // while tolerating the small run-to-run jitter from the vitest-runner's per-test
   // coverage attribution (see note below). Raise it as the score climbs.
   //

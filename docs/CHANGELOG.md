@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-11-19
+
+### Changed (BREAKING)
+
+- Requires Node.js 26 or later (`engines.node` is now `>=26`); Node.js 24 is no longer
+  supported.
+
 ## [2.2.0] - 2026-11-18
 
 ### Added
